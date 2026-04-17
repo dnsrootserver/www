@@ -1,0 +1,17 @@
+name: hello-world
+version: "1.0.0"
+description: "A simple hello world skill to get started"
+author: agentforge
+triggers:
+  - "hello"
+  - "hi"
+  - "greet"
+
+variables:
+  greeting: "Hello"
+
+steps:
+  - tool: output
+    params:
+      message: "👋 {{ greeting }}, world! This is AgentForge in action."
+      format: text

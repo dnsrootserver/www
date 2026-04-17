@@ -1,0 +1,65 @@
+name: system-info
+version: "1.0.0"
+description: "Gather system information and generate a report"
+author: agentforge
+triggers:
+  - "system info"
+  - "system report"
+  - "check system"
+  - "diagnostics"
+
+variables:
+  report_file: "/tmp/system-report.txt"
+
+steps:
+  - tool: log
+    params:
+      message: "📊 Gathering system information..."
+      level: info
+
+  - tool: shell
+    params:
+      command: "uname -a"
+      timeout: 5
+    output: uname
+
+  - tool: shell
+    params:
+      command: "df -h 2>/dev/null || powershell Get-PSDrive 2>/dev/null || echo 'N/A'"
+      timeout: 5
+    output: disk
+
+  - tool: shell
+    params:
+      command: "free -h 2>/dev/null || vm_stat 2>/dev/null || echo 'N/A'"
+      timeout: 5
+    output: memory
+
+  - tool: shell
+    params:
+      command: "uptime"
+      timeout: 5
+    output: uptime
+
+  - tool: shell
+    params:
+      command: "ps aux --sort=-%cpu 2>/dev/null | head -10 || ps aux | head -10"
+      timeout: 5
+    output: top_procs
+
+  - tool: transform
+    params:
+      expr: |
+        "--- System Report ---\n" +
+        "System: " + str(uname.get('stdout','N/A').strip()) + "\n" +
+        "Uptime: " + str(uptime.get('stdout','N/A').strip()) + "\n" +
+        "Disk:\n" + str(disk.get('stdout','N/A')) +
+        "Memory:\n" + str(memory.get('stdout','N/A')) +
+        "Top Processes:\n" + str(top_procs.get('stdout','N/A'))
+      var: report
+
+  - tool: output
+    params:
+      message: "{{ report }}"
+      format: text
+      title: "System Report"

@@ -1,0 +1,75 @@
+name: code-review
+version: "1.0.0"
+description: "Analyze code files for quality, security issues, and best practices"
+author: agentforge
+triggers:
+  - "review code"
+  - "check code"
+  - "code review"
+  - "analyze code"
+  - type: regex
+    pattern: "review (.+\\.(py|js|ts|go|rs|java|rb|php))"
+
+variables:
+  checks:
+    - name: "Syntax errors"
+      patterns: ["SyntaxError", "IndentationError", "unexpected EOF"]
+    - name: "Security issues"
+      patterns: ["eval(", "exec(", "os.system(", "subprocess.call(", "__import__", "pickle.loads"]
+    - name: "Hardcoded secrets"
+      patterns: ["password=", "secret=", "api_key=", "token=", "AKIA"]
+    - name: "Debug code"
+      patterns: ["console.log", "print(", "debugger", "pdb.set_trace", "breakpoint()"]
+    - name: "TODO/FIXME"
+      patterns: ["TODO", "FIXME", "HACK", "XXX", "WORKAROUND"]
+
+steps:
+  - tool: log
+    params:
+      message: "🔍 Analyzing code..."
+      level: info
+
+  - tool: read_file
+    params:
+      path: "{{ input | regex_search('\\S+\\.(py|js|ts|go|rs|java|rb|php)') }}"
+    output: code_file
+
+  - tool: transform
+    params:
+      expr: |
+        code = code_file.get('content', '')
+        lines = code.split('\n')
+        issues = []
+        for check in checks:
+            for pattern in check['patterns']:
+                for i, line in enumerate(lines):
+                    if pattern in line:
+                        issues.append(f"[{check['name']}] Line {i+1}: {line.strip()[:80]}")
+        stats = {
+            'total_lines': len(lines),
+            'blank_lines': sum(1 for l in lines if not l.strip()),
+            'comment_lines': sum(1 for l in lines if l.strip().startswith('#') or l.strip().startswith('//')),
+            'code_lines': len(lines) - sum(1 for l in lines if not l.strip()) - sum(1 for l in lines if l.strip().startswith('#') or l.strip().startswith('//')),
+            'issues_found': len(issues),
+            'issues': issues[:20],
+        }
+        stats
+      var: analysis
+
+  - tool: output
+    params:
+      message: |
+        📊 **Code Analysis Report**
+        
+        Lines: {{ analysis.total_lines }} total, {{ analysis.code_lines }} code, {{ analysis.blank_lines }} blank, {{ analysis.comment_lines }} comments
+        
+        {% if analysis.issues_found > 0 %}
+        ⚠️ **{{ analysis.issues_found }} potential issue(s) found:**
+        {% for issue in analysis.issues %}
+        - {{ issue }}
+        {% endfor %}
+        {% else %}
+        ✅ No obvious issues found!
+        {% endif %}
+      format: markdown
+      title: "Code Review"

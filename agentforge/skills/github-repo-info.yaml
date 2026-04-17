@@ -1,0 +1,64 @@
+name: github-repo-info
+version: "1.0.0"
+description: "Get detailed information about a GitHub repository"
+author: agentforge
+triggers:
+  - "github repo"
+  - "repo info"
+  - type: regex
+    pattern: "github.com/[\\w-]+/[\\w-]+"
+
+variables: {}
+
+steps:
+  - tool: log
+    params:
+      message: "📦 Fetching repository info..."
+      level: info
+
+  - tool: transform
+    params:
+      expr: |
+        import re
+        match = re.search(r'github\.com/([\w.-]+)/([\w.-]+)', input)
+        if match:
+            f"{match.group(1)}/{match.group(2)}"
+        else:
+            input.strip()
+      var: repo
+
+  - tool: http
+    params:
+      url: "https://api.github.com/repos/{{ repo }}"
+      method: GET
+      headers:
+        Accept: "application/vnd.github.v3+json"
+    output: api_result
+
+  - tool: transform
+    params: |
+      data = json.loads(api_result.get('body', '{}'))
+      if 'message' in data:
+          f"Error: {data['message']}"
+      else:
+          lines = [
+              f"📦 **{data.get('full_name', 'N/A')}**",
+              f"📝 {data.get('description', 'No description')}",
+              f"⭐ Stars: {data.get('stargazers_count', 0):,}",
+              f"🍴 Forks: {data.get('forks_count', 0):,}",
+              f"👀 Watchers: {data.get('watchers_count', 0):,}",
+              f"🐛 Open Issues: {data.get('open_issues_count', 0):,}",
+              f"📜 License: {data.get('license', {}).get('name', 'N/A') if data.get('license') else 'N/A'}",
+              f"💻 Language: {data.get('language', 'N/A')}",
+              f"📅 Created: {data.get('created_at', 'N/A')[:10]}",
+              f"🔄 Updated: {data.get('updated_at', 'N/A')[:10]}",
+              f"🌐 URL: {data.get('html_url', 'N/A')}",
+          ]
+          '\n'.join(lines)
+      var: info
+
+  - tool: output
+    params:
+      message: "{{ info }}"
+      format: markdown
+      title: "Repository Info"

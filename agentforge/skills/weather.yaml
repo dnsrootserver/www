@@ -1,0 +1,50 @@
+name: weather
+version: "1.0.0"
+description: "Get current weather for any city"
+author: agentforge
+triggers:
+  - "weather"
+  - "temperature"
+  - type: regex
+    pattern: "weather (in |for )?(.+)"
+
+variables:
+  default_city: "Beijing"
+
+steps:
+  - tool: log
+    params:
+      message: "🌤️ Fetching weather..."
+      level: info
+
+  - tool: transform
+    params:
+      expr: |
+        import re
+        match = re.search(r'weather\s+(?:in|for)?\s*(.+)', input, re.IGNORECASE)
+        if match:
+            match.group(1).strip()
+        else:
+            default_city
+      var: city
+
+  - tool: shell
+    params:
+      command: "curl -s 'wttr.in/{{ city }}?format=%l:+%c+%t+%h+%w+%p' 2>&1"
+      timeout: 10
+    output: weather_raw
+
+  - tool: shell
+    params:
+      command: "curl -s 'wttr.in/{{ city }}?format=4' 2>&1"
+      timeout: 10
+    output: weather_summary
+
+  - tool: output
+    params:
+      message: |
+        {{ weather_summary.stdout }}
+        
+        {{ weather_raw.stdout }}
+      format: text
+      title: "Weather"

@@ -1,0 +1,33 @@
+name: url-reader
+version: "1.0.0"
+description: "Read and extract content from any URL"
+author: agentforge
+triggers:
+  - "read url"
+  - "open url"
+  - "fetch page"
+  - type: regex
+    pattern: "https?://"
+  - type: regex
+    pattern: "read (the )?(page|article|site|url)"
+
+variables:
+  max_chars: 5000
+
+steps:
+  - tool: log
+    params:
+      message: "📖 Reading URL content..."
+      level: info
+
+  - tool: shell
+    params:
+      command: 'curl -s "https://r.jina.ai/{{ input | regex_search("https?://\\S+") }}" 2>&1 | head -200'
+      timeout: 20
+    output: page_content
+
+  - tool: output
+    params:
+      message: "{{ page_content.stdout }}"
+      format: markdown
+      title: "Page Content"

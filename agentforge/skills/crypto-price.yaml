@@ -1,0 +1,60 @@
+name: crypto-price
+version: "1.0.0"
+description: "Get cryptocurrency prices and market data"
+author: agentforge
+triggers:
+  - "crypto"
+  - "bitcoin"
+  - "ethereum"
+  - "btc price"
+  - "eth price"
+  - type: regex
+    pattern: "(price|crypto) (of |for )?(.+)"
+
+variables:
+  symbols:
+    btc: "bitcoin"
+    eth: "ethereum"
+    sol: "solana"
+    bnb: "binancecoin"
+    xrp: "ripple"
+    ada: "cardano"
+    doge: "dogecoin"
+    dot: "polkadot"
+
+steps:
+  - tool: log
+    params:
+      message: "💰 Fetching crypto prices..."
+      level: info
+
+  - tool: http
+    params:
+      url: "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,binancecoin,ripple,cardano,dogecoin,polkadot&vs_currencies=usd&include_24hr_change=true&include_market_cap=true"
+      method: GET
+    output: price_data
+
+  - tool: transform
+    params:
+      expr: |
+        import json
+        data = json.loads(price_data.get('body', '{}'))
+        lines = []
+        names = {'bitcoin': 'BTC', 'ethereum': 'ETH', 'solana': 'SOL', 
+                'binancecoin': 'BNB', 'ripple': 'XRP', 'cardano': 'ADA',
+                'dogecoin': 'DOGE', 'polkadot': 'DOT'}
+        for coin_id, info in data.items():
+            name = names.get(coin_id, coin_id.upper())
+            price = info.get('usd', 0)
+            change = info.get('usd_24h_change', 0)
+            mcap = info.get('usd_market_cap', 0)
+            arrow = "🟢" if change >= 0 else "🔴"
+            lines.append(f"{arrow} {name}: ${price:,.2f} ({change:+.1f}%) MCap: ${mcap/1e9:.1f}B")
+        '\n'.join(lines)
+      var: output_text
+
+  - tool: output
+    params:
+      message: "{{ output_text }}"
+      format: text
+      title: "Crypto Prices"

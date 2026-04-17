@@ -1,0 +1,32 @@
+name: web-search
+version: "1.0.0"
+description: "Search the web and summarize results using Jina Reader"
+author: agentforge
+triggers:
+  - "search"
+  - "google"
+  - "find information"
+  - "look up"
+  - type: regex
+    pattern: "search (for )?(.+)"
+
+variables:
+  num_results: 5
+
+steps:
+  - tool: log
+    params:
+      message: "🔍 Searching the web..."
+      level: info
+
+  - tool: shell
+    params:
+      command: 'curl -s "https://r.jina.ai/https://www.google.com/search?q={{ input | urlencode }}" 2>&1 | head -200'
+      timeout: 15
+    output: search_result
+
+  - tool: output
+    params:
+      message: "{{ search_result.stdout }}"
+      format: markdown
+      title: "Search Results"
