@@ -1,0 +1,72 @@
+name: pig-latin
+version: "1.1.0"
+description: "Convert text to Pig Latin"
+description_zh: "将文本转换为猪拉丁语"
+author: agentforge
+category: fun
+triggers: ["pig latin", "convert to pig latin", "pig latin text", "translate pig latin"]
+triggers_zh: ["猪拉丁语", "转换为猪拉丁语", "猪拉丁文本", "翻译猪拉丁语"]
+tags: [text, fun, language]
+steps:
+  - tool: python
+    params:
+      code: |
+        def to_pig_latin(word):
+            """Convert a word to Pig Latin"""
+            if not word:
+                return word
+            
+            vowels = 'aeiouAEIOU'
+            
+            # Handle punctuation at the end
+            punctuation = ''
+            if word and word[-1] in '.,!?;:':
+                punctuation = word[-1]
+                word = word[:-1]
+            
+            if not word:
+                return punctuation
+            
+            # Check if word starts with a vowel
+            if word[0] in vowels:
+                result = word + 'way'
+            else:
+                # Find the first vowel
+                first_vowel = -1
+                for i, char in enumerate(word):
+                    if char in vowels:
+                        first_vowel = i
+                        break
+                
+                if first_vowel == -1:
+                    # No vowels, just add 'ay'
+                    result = word + 'ay'
+                else:
+                    # Move consonants before first vowel to end
+                    consonants = word[:first_vowel]
+                    rest = word[first_vowel:]
+                    result = rest + consonants + 'ay'
+            
+            # Preserve capitalization
+            if word[0].isupper():
+                result = result[0].upper() + result[1:].lower()
+            
+            return result + punctuation
+        
+        text = "{{ input }}".strip()
+        if not text:
+            text = "Hello world this is a test"
+        
+        # Convert each word
+        words = text.split()
+        pig_latin_words = [to_pig_latin(word) for word in words]
+        result = ' '.join(pig_latin_words)
+        
+        output = f"Original: {text}\nPig Latin: {result}"
+        print(output)
+      var: result
+  - tool: output
+    params:
+      message: "{{ result }}"
+      format: panel
+      title: "Pig Latin Converter"

@@ -1,0 +1,141 @@
+version: 1.1.0
+premium: true
+name: Hacker News
+description:
+  en: Fetch trending stories from Hacker News, search stories, and get user activity.
+  zh: 从Hacker News获取热门故事，搜索故事，获取用户活动。
+tools:
+  - name: get_top_stories
+    description:
+      en: Get current top stories from Hacker News
+      zh: 获取Hacker News当前热门故事
+    parameters:
+      limit:
+        type: integer
+        description:
+          en: Number of stories to return (max 500)
+          zh: 返回故事数量（最多500）
+        default: 30
+      category:
+        type: string
+        enum: [top, best, new, ask, show, job]
+        description:
+          en: Story category
+          zh: 故事类别
+        default: top
+    implementation:
+      type: shell
+      command: |
+        case "{{category}}" in
+          "top") endpoint="topstories" ;;
+          "best") endpoint="beststories" ;;
+          "new") endpoint="newstories" ;;
+          "ask") endpoint="askstories" ;;
+          "show") endpoint="showstories" ;;
+          "job") endpoint="jobstories" ;;
+          *) endpoint="topstories" ;;
+        esac
+        
+        # Get story IDs
+        ids=$(curl -s "https://hacker-news.firebaseio.com/v0/$endpoint.json" | jq -r '.[0:{{limit}}] | .[]')
+        
+        echo "["
+        first=true
+        for id in $ids; do
+          if [ "$first" = true ]; then
+            first=false
+          else
+            echo ","
+          fi
+          curl -s "https://hacker-news.firebaseio.com/v0/item/$id.json" | jq '{id: .id, title: .title, url: .url, score: .score, by: .by, time: .time, descendants: .descendants, type: .type}'
+        done
+        echo "]"
+
+  - name: search_stories
+    description:
+      en: Search Hacker News stories by keyword
+      zh: 按关键词搜索Hacker News故事
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      tags:
+        type: string
+        enum: [story, comment, poll, job, ask_hn, show_hn]
+        description:
+          en: Content type filter
+          zh: 内容类型过滤器
+        default: story
+      limit:
+        type: integer
+        description:
+          en: Number of results to return
+          zh: 返回结果数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        curl -s "https://hn.algolia.com/api/v1/search?query={{query}}&tags={{tags}}&hitsPerPage={{limit}}" | jq '.hits[] | {title: .title, url: .url, points: .points, author: .author, created_at: .created_at, num_comments: .num_comments, objectID: .objectID}'
+
+  - name: get_story_details
+    description:
+      en: Get detailed information about a specific Hacker News story
+      zh: 获取特定Hacker News故事的详细信息
+    parameters:
+      story_id:
+        type: string
+        description:
+          en: Hacker News story ID
+          zh: Hacker News故事ID
+        required: true
+    implementation:
+      type: shell
+      command: |
+        curl -s "https://hacker-news.firebaseio.com/v0/item/{{story_id}}.json" | jq '{
+          id: .id,
+          title: .title,
+          url: .url,
+          text: .text,
+          score: .score,
+          by: .by,
+          time: .time,
+          time_ago: (.time | todate),
+          descendants: .descendants,
+          type: .type,
+          kids: .kids
+        }'
+
+  - name: get_user_activity
+    description:
+      en: Get recent activity of a Hacker News user
+      zh: 获取Hacker News用户的最近活动
+    parameters:
+      username:
+        type: string
+        description:
+          en: Hacker News username
+          zh: Hacker News用户名
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of items to return
+          zh: 返回项目数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        # Get user info
+        user_info=$(curl -s "https://hacker-news.firebaseio.com/v0/user/{{username}}.json")
+        echo "User info:"
+        echo "$user_info" | jq '{id: .id, karma: .karma, created: .created, about: .about}'
+        
+        # Get recent submissions
+        echo "Recent submissions:"
+        submission_ids=$(echo "$user_info" | jq -r '.submitted[0:{{limit}}] | .[]')
+        for id in $submission_ids; do
+          curl -s "https://hacker-news.firebaseio.com/v0/item/$id.json" | jq '{id: .id, type: .type, title: .title, url: .url, score: .points, time: .time}'
+        done

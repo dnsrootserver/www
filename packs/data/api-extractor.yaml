@@ -1,0 +1,132 @@
+version: 1.1.0
+premium: true
+name: API Extractor
+description:
+  en: Extract data from REST APIs with support for authentication, pagination, and output formatting.
+  zh: 从REST API提取数据，支持认证、分页和输出格式化。
+tools:
+  - name: extract_api
+    description:
+      en: Make API request and extract data
+      zh: 发起API请求并提取数据
+    parameters:
+      url:
+        type: string
+        description:
+          en: API endpoint URL
+          zh: API端点URL
+        required: true
+      method:
+        type: string
+        enum: [GET, POST, PUT, DELETE, PATCH]
+        description:
+          en: HTTP method
+          zh: HTTP方法
+        default: GET
+      headers:
+        type: object
+        description:
+          en: HTTP headers as key-value pairs
+          zh: HTTP头键值对
+        default: null
+      body:
+        type: string
+        description:
+          en: Request body (for POST/PUT/PATCH)
+          zh: 请求体（用于POST/PUT/PATCH）
+        default: null
+      auth_token:
+        type: string
+        description:
+          en: Bearer token for authentication
+          zh: 用于认证的Bearer令牌
+        default: null
+      output_format:
+        type: string
+        enum: [json, raw, headers, status]
+        description:
+          en: Output format
+          zh: 输出格式
+        default: json
+    implementation:
+      type: shell
+      command: |
+        # Build curl command
+        cmd="curl -s -X {{method}}"
+        # Add headers
+        if [ -n "{{auth_token}}" ] && [ "{{auth_token}}" != "null" ]; then
+          cmd="$cmd -H 'Authorization: Bearer {{auth_token}}'"
+        fi
+        if [ -n "{{headers}}" ] && [ "{{headers}}" != "null" ]; then
+          echo '{{headers}}' | jq -r 'to_entries[] | "-H \"\(.key): \(.value)\""' | while read -r header; do
+            cmd="$cmd $header"
+          done
+        fi
+        # Add body
+        if [ -n "{{body}}" ] && [ "{{body}}" != "null" ]; then
+          cmd="$cmd -d '{{body}}'"
+        fi
+        # Execute based on output format
+        case "{{output_format}}" in
+          "json")
+            eval "$cmd '{{url}}'" | jq '.' 2>/dev/null || cat
+            ;;
+          "raw")
+            eval "$cmd '{{url}}'"
+            ;;
+          "headers")
+            eval "$cmd -I '{{url}}'"
+            ;;
+          "status")
+            eval "$cmd -w '%{http_code}' -o /dev/null '{{url}}'"
+            ;;
+        esac
+  - name: paginate_api
+    description:
+      en: Extract paginated API data and combine results
+      zh: 提取分页API数据并合并结果
+    parameters:
+      url:
+        type: string
+        description:
+          en: Base API URL (page param will be appended)
+          zh: 基础API URL（将附加页面参数）
+        required: true
+      page_param:
+        type: string
+        description:
+          en: Query parameter name for page number
+          zh: 页码的查询参数名
+        default: "page"
+      max_pages:
+        type: integer
+        description:
+          en: Maximum number of pages to fetch
+          zh: 最大获取页数
+        default: 10
+      auth_token:
+        type: string
+        description:
+          en: Bearer token for authentication
+          zh: 用于认证的Bearer令牌
+        default: null
+    implementation:
+      type: shell
+      command: |
+        results="[]"
+        page=1
+        while [ $page -le {{max_pages}} ]; do
+          echo "Fetching page $page..."
+          if [ -n "{{auth_token}}" ] && [ "{{auth_token}}" != "null" ]; then
+            resp=$(curl -s -H "Authorization: Bearer {{auth_token}}" "{{url}}?{{page_param}}=$page")
+          else
+            resp=$(curl -s "{{url}}?{{page_param}}=$page")
+          fi
+          # Check if empty response or error
+          if [ -z "$resp" ] || echo "$resp" | jq -e '. == [] or . == {}' >/dev/null 2>&1; then
+            break
+          fi
+          results=$(echo "$results" "$resp" | jq -s '.[0] + .[1]')
+          page=$((page + 1))
+        done
+        echo "$results" | jq '.'

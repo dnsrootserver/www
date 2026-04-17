@@ -1,0 +1,234 @@
+version: 1.1.0
+premium: true
+name: arXiv Search
+description:
+  en: Search arXiv for academic papers, get paper details, and monitor new publications.
+  zh: 在arXiv上搜索学术论文，获取论文详情，监控新出版物。
+tools:
+  - name: search_papers
+    description:
+      en: Search arXiv papers by keyword, author, or category
+      zh: 按关键词、作者或类别搜索arXiv论文
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query (keywords, title, author, etc.)
+          zh: 搜索查询（关键词、标题、作者等）
+        required: true
+      category:
+        type: string
+        description:
+          en: arXiv category (e.g., cs.AI, physics.hep-th, math.CO)
+          zh: arXiv类别（如cs.AI、physics.hep-th、math.CO）
+        default: null
+      max_results:
+        type: integer
+        description:
+          en: Maximum number of results to return
+          zh: 返回结果最大数量
+        default: 20
+      sort_by:
+        type: string
+        enum: [relevance, lastUpdatedDate, submittedDate]
+        description:
+          en: Sort results by
+          zh: 结果排序方式
+        default: relevance
+      sort_order:
+        type: string
+        enum: [ascending, descending]
+        description:
+          en: Sort order
+          zh: 排序顺序
+        default: descending
+    implementation:
+      type: shell
+      command: |
+        query="{{query}}"
+        if [ -n "{{category}}" ] && [ "{{category}}" != "null" ]; then
+          query="cat:{{category}}+AND+$query"
+        fi
+        
+        curl -s "http://export.arxiv.org/api/query?search_query=$query&start=0&max_results={{max_results}}&sortBy={{sort_by}}&sortOrder={{sort_order}}" | python3 << 'EOF'
+        import xml.etree.ElementTree as ET
+        import sys
+        import json
+        import re
+        
+        xml_content = sys.stdin.read()
+        root = ET.fromstring(xml_content)
+        
+        ns = {
+            'atom': 'http://www.w3.org/2005/Atom',
+            'arxiv': 'http://arxiv.org/schemas/atom'
+        }
+        
+        papers = []
+        for entry in root.findall('atom:entry', ns):
+            title = entry.find('atom:title', ns).text.strip().replace('\n', ' ')
+            summary = entry.find('atom:summary', ns).text.strip().replace('\n', ' ')
+            published = entry.find('atom:published', ns).text
+            updated = entry.find('atom:updated', ns).text
+            arxiv_id = entry.find('atom:id', ns).text.split('/abs/')[-1]
+            
+            authors = []
+            for author in entry.findall('atom:author', ns):
+                authors.append(author.find('atom:name', ns).text)
+            
+            categories = []
+            for category in entry.findall('atom:category', ns):
+                categories.append(category.get('term'))
+            
+            pdf_link = ""
+            for link in entry.findall('atom:link', ns):
+                if link.get('title') == 'pdf':
+                    pdf_link = link.get('href')
+            
+            papers.append({
+                'title': title,
+                'authors': authors,
+                'summary': summary[:300] + '...' if len(summary) > 300 else summary,
+                'published': published,
+                'updated': updated,
+                'arxiv_id': arxiv_id,
+                'pdf_url': pdf_link,
+                'categories': categories,
+                'url': f'http://arxiv.org/abs/{arxiv_id}'
+            })
+        
+        print(json.dumps(papers, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: get_paper_details
+    description:
+      en: Get detailed information about a specific arXiv paper
+      zh: 获取特定arXiv论文的详细信息
+    parameters:
+      arxiv_id:
+        type: string
+        description:
+          en: arXiv paper ID (e.g., 2301.00001)
+          zh: arXiv论文ID（如2301.00001）
+        required: true
+    implementation:
+      type: shell
+      command: |
+        curl -s "http://export.arxiv.org/api/query?id_list={{arxiv_id}}" | python3 << 'EOF'
+        import xml.etree.ElementTree as ET
+        import sys
+        import json
+        
+        xml_content = sys.stdin.read()
+        root = ET.fromstring(xml_content)
+        
+        ns = {
+            'atom': 'http://www.w3.org/2005/Atom',
+            'arxiv': 'http://arxiv.org/schemas/atom'
+        }
+        
+        entry = root.find('atom:entry', ns)
+        if entry is None:
+            print("Paper not found")
+            sys.exit(1)
+        
+        title = entry.find('atom:title', ns).text.strip().replace('\n', ' ')
+        summary = entry.find('atom:summary', ns).text.strip().replace('\n', ' ')
+        published = entry.find('atom:published', ns).text
+        updated = entry.find('atom:updated', ns).text
+        
+        authors = []
+        for author in entry.findall('atom:author', ns):
+            authors.append(author.find('atom:name', ns).text)
+        
+        categories = []
+        for category in entry.findall('atom:category', ns):
+            categories.append(category.get('term'))
+        
+        links = {}
+        for link in entry.findall('atom:link', ns):
+            links[link.get('title', 'alternate')] = link.get('href')
+        
+        comment = entry.find('arxiv:comment', ns)
+        comment_text = comment.text if comment is not None else ""
+        
+        journal_ref = entry.find('arxiv:journal_ref', ns)
+        journal_text = journal_ref.text if journal_ref is not None else ""
+        
+        print(json.dumps({
+            'title': title,
+            'authors': authors,
+            'summary': summary,
+            'published': published,
+            'updated': updated,
+            'arxiv_id': arxiv_id,
+            'categories': categories,
+            'links': links,
+            'comment': comment_text,
+            'journal_ref': journal_text,
+            'url': f'http://arxiv.org/abs/{{arxiv_id}}',
+            'pdf_url': f'http://arxiv.org/pdf/{{arxiv_id}}'
+        }, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: monitor_category
+    description:
+      en: Monitor new papers in a specific arXiv category
+      zh: 监控特定arXiv类别的新论文
+    parameters:
+      category:
+        type: string
+        description:
+          en: arXiv category (e.g., cs.AI, physics.hep-th)
+          zh: arXiv类别（如cs.AI、physics.hep-th）
+        required: true
+      days:
+        type: integer
+        description:
+          en: Number of days to look back
+          zh: 回溯天数
+        default: 7
+      max_results:
+        type: integer
+        description:
+          en: Maximum number of papers to return
+          zh: 返回论文最大数量
+        default: 50
+    implementation:
+      type: shell
+      command: |
+        # Calculate date range
+        end_date=$(date +%Y%m%d)
+        start_date=$(date -d "-{{days}} days" +%Y%m%d)
+        
+        curl -s "http://export.arxiv.org/api/query?search_query=submittedDate:[$start_date+TO+$end_date]+AND+cat:{{category}}&start=0&max_results={{max_results}}&sortBy=submittedDate&sortOrder=descending" | python3 << 'EOF'
+        import xml.etree.ElementTree as ET
+        import sys
+        import json
+        
+        xml_content = sys.stdin.read()
+        root = ET.fromstring(xml_content)
+        
+        ns = {
+            'atom': 'http://www.w3.org/2005/Atom',
+            'arxiv': 'http://arxiv.org/schemas/atom'
+        }
+        
+        papers = []
+        for entry in root.findall('atom:entry', ns):
+            title = entry.find('atom:title', ns).text.strip().replace('\n', ' ')
+            authors = [author.find('atom:name', ns).text for author in entry.findall('atom:author', ns)]
+            published = entry.find('atom:published', ns).text
+            arxiv_id = entry.find('atom:id', ns).text.split('/abs/')[-1]
+            
+            papers.append({
+                'title': title,
+                'authors': authors[:3],  # Limit authors
+                'published': published,
+                'arxiv_id': arxiv_id,
+                'url': f'http://arxiv.org/abs/{arxiv_id}'
+            })
+        
+        print(f"Found {len(papers)} papers in category {{category}} from the last {{days}} days")
+        print(json.dumps(papers, indent=2, ensure_ascii=False))
+        EOF

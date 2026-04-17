@@ -1,0 +1,158 @@
+version: 1.1.0
+premium: true
+name: API Mocker
+description:
+  en: Create mock API endpoints for testing. Serve static JSON responses or dynamic scripted responses.
+  zh: 创建模拟API端点用于测试。提供静态JSON响应或动态脚本响应。
+tools:
+  - name: create_mock_server
+    description:
+      en: Generate and run a mock API server
+      zh: 生成并运行模拟API服务器
+    parameters:
+      port:
+        type: integer
+        description:
+          en: Port to listen on
+          zh: 监听端口
+        default: 8080
+      endpoints:
+        type: array
+        items:
+          type: object
+        description:
+          en: List of endpoint definitions [{path, method, response, status}]
+          zh: 端点定义列表 [{path, method, response, status}]
+        required: true
+      cors:
+        type: boolean
+        description:
+          en: Enable CORS headers
+          zh: 启用CORS头
+        default: true
+    implementation:
+      type: shell
+      command: |
+        # Generate Python mock server script
+        script=$(mktemp /tmp/mock_server_XXXXXX.py)
+        cat > "$script" << 'EOF'
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        import json
+        import sys
+        PORT = {{port}}
+        ENDPOINTS = {{endpoints}}
+        ENABLE_CORS = {{cors}}
+        class MockHandler(BaseHTTPRequestHandler):
+            def _send_cors(self):
+                if ENABLE_CORS:
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+            def do_OPTIONS(self):
+                self.send_response(200)
+                self._send_cors()
+                self.end_headers()
+            def _handle(self, method):
+                for ep in ENDPOINTS:
+                    if self.path == ep.get('path') and method == ep.get('method', 'GET'):
+                        status = ep.get('status', 200)
+                        response = ep.get('response', {})
+                        self.send_response(status)
+                        self.send_header('Content-Type', 'application/json')
+                        self._send_cors()
+                        self.end_headers()
+                        if isinstance(response, str):
+                            self.wfile.write(response.encode())
+                        else:
+                            self.wfile.write(json.dumps(response).encode())
+                        return
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self._send_cors()
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Not found"}).encode())
+            def do_GET(self): self._handle('GET')
+            def do_POST(self): self._handle('POST')
+            def do_PUT(self): self._handle('PUT')
+            def do_DELETE(self): self._handle('DELETE')
+        print(f"Mock server running on http://localhost:{PORT}")
+        print("Endpoints:")
+        for ep in ENDPOINTS:
+            print(f"  {ep.get('method', 'GET')} {ep.get('path')}")
+        server = HTTPServer(('0.0.0.0', PORT), MockHandler)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+            server.shutdown()
+        EOF
+        echo "Starting mock server on port {{port}}..."
+        python3 "$script" &
+        echo "Server PID: $!"
+        echo "Mock server script saved at: $script"
+  - name: generate_openapi_mock
+    description:
+      en: Generate mock server from OpenAPI/Swagger spec
+      zh: 从OpenAPI/Swagger规范生成模拟服务器
+    parameters:
+      spec_file:
+        type: string
+        description:
+          en: Path to OpenAPI JSON/YAML spec file
+          zh: OpenAPI JSON/YAML规范文件路径
+        required: true
+      port:
+        type: integer
+        description:
+          en: Port to listen on
+          zh: 监听端口
+        default: 8080
+    implementation:
+      type: shell
+      command: |
+        python3 << EOF
+        import json
+        import yaml
+        import sys
+        spec_file = "{{spec_file}}"
+        # Load spec
+        with open(spec_file) as f:
+            if spec_file.endswith(('.yaml', '.yml')):
+                spec = yaml.safe_load(f)
+            else:
+                spec = json.load(f)
+        # Extract endpoints
+        endpoints = []
+        for path, methods in spec.get('paths', {}).items():
+            for method, details in methods.items():
+                if method.lower() in ['get', 'post', 'put', 'delete', 'patch']:
+                    # Generate mock response from schema
+                    responses = details.get('responses', {})
+                    success = responses.get('200', responses.get('201', {}))
+                    schema = success.get('content', {}).get('application/json', {}).get('schema', {})
+                    # Simple mock data generation
+                    mock_response = {}
+                    if schema.get('type') == 'array':
+                        items = schema.get('items', {})
+                        mock_response = [generate_mock(items)]
+                    elif schema.get('type') == 'object':
+                        mock_response = generate_mock(schema)
+                    endpoints.append({
+                        'path': path,
+                        'method': method.upper(),
+                        'response': mock_response,
+                        'status': 200
+                    })
+        print(json.dumps(endpoints, indent=2))
+        def generate_mock(schema):
+            t = schema.get('type', 'string')
+            if t == 'string': return "mock_string"
+            if t == 'integer': return 42
+            if t == 'number': return 3.14
+            if t == 'boolean': return True
+            if t == 'array': return [generate_mock(schema.get('items', {}))]
+            if t == 'object':
+                props = schema.get('properties', {})
+                return {k: generate_mock(v) for k, v in props.items()}
+            return None
+        EOF

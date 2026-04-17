@@ -1,0 +1,120 @@
+version: 1.1.0
+premium: true
+name: JSON Transformer
+description:
+  en: Transform JSON data using jq-like queries, filtering, mapping, and restructuring.
+  zh: 使用类似jq的查询、过滤、映射和重组来转换JSON数据。
+tools:
+  - name: transform_json
+    description:
+      en: Apply jq transformation to JSON input
+      zh: 对JSON输入应用jq转换
+    parameters:
+      input:
+        type: string
+        description:
+          en: JSON string or file path (prefix with @ for file)
+          zh: JSON字符串或文件路径（文件用@前缀）
+        required: true
+      filter:
+        type: string
+        description:
+          en: jq filter expression
+          zh: jq过滤表达式
+        default: "."
+    implementation:
+      type: shell
+      command: |
+        # Check if jq is installed
+        if ! command -v jq &> /dev/null; then
+          echo "Error: jq is required but not installed. Install with: apt-get install jq"
+          exit 1
+        fi
+        # Determine input source
+        if [[ "{{input}}" == @* ]]; then
+          file_path="{{input:1}}"
+          if [ ! -f "$file_path" ]; then
+            echo "Error: File not found: $file_path"
+            exit 1
+          fi
+          jq '{{filter}}' "$file_path"
+        else
+          echo '{{input}}' | jq '{{filter}}'
+        fi
+  - name: json_to_csv
+    description:
+      en: Convert JSON array to CSV format
+      zh: 将JSON数组转换为CSV格式
+    parameters:
+      input:
+        type: string
+        description:
+          en: JSON array string or file path (prefix with @)
+          zh: JSON数组字符串或文件路径（用@前缀）
+        required: true
+      columns:
+        type: string
+        description:
+          en: Comma-separated column names (optional, auto-detected)
+          zh: 逗号分隔的列名（可选，自动检测）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        if ! command -v jq &> /dev/null; then
+          echo "Error: jq required"
+          exit 1
+        fi
+        if [[ "{{input}}" == @* ]]; then
+          file_path="{{input:1}}"
+          data=$(cat "$file_path")
+        else
+          data="{{input}}"
+        fi
+        if [ -z "{{columns}}" ] || [ "{{columns}}" = "null" ]; then
+          echo "$data" | jq -r '(.[0] | keys_unsorted) as $keys | $keys, (.[] | [.[$keys[]]]) | @csv'
+        else
+          IFS=',' read -ra COLS <<< "{{columns}}"
+          keys=$(printf '"%s",' "${COLS[@]}")
+          keys="[${keys%,}]"
+          echo "$data" | jq -r "$keys as \$k | \$k, (.[] | [.\$k[]]) | @csv"
+        fi
+  - name: merge_json
+    description:
+      en: Merge multiple JSON objects/arrays
+      zh: 合并多个JSON对象/数组
+    parameters:
+      files:
+        type: array
+        items:
+          type: string
+        description:
+          en: List of JSON file paths
+          zh: JSON文件路径列表
+        required: true
+      merge_strategy:
+        type: string
+        enum: [deep, shallow, concat]
+        description:
+          en: Merge strategy
+          zh: 合并策略
+        default: deep
+    implementation:
+      type: shell
+      command: |
+        if ! command -v jq &> /dev/null; then
+          echo "Error: jq required"
+          exit 1
+        fi
+        # Build jq filter based on strategy
+        case "{{merge_strategy}}" in
+          "deep")
+            jq -s 'reduce .[] as $item ({}; . * $item)' {{#files}}'{{.}}' {{/files}}
+            ;;
+          "shallow")
+            jq -s 'reduce .[] as $item ({}; . + $item)' {{#files}}'{{.}}' {{/files}}
+            ;;
+          "concat")
+            jq -s 'add' {{#files}}'{{.}}' {{/files}}
+            ;;
+        esac

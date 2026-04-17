@@ -1,0 +1,298 @@
+version: 1.1.0
+premium: true
+name: Deploy Helper
+description:
+  en: Automate deployment tasks including rolling updates, rollbacks, health checks, and notifications.
+  zh: 自动化部署任务，包括滚动更新、回滚、健康检查和通知。
+triggers:
+  en:
+    - "deploy"
+    - "deployment"
+    - "rolling update"
+    - "rollback"
+    - "release"
+  zh:
+    - "部署"
+    - "部署"
+    - "滚动更新"
+    - "回滚"
+    - "发布"
+tools:
+  - name: k8s_deploy
+    description:
+      en: Deploy to Kubernetes with rolling update strategy
+      zh: 使用滚动更新策略部署到Kubernetes
+    parameters:
+      deployment:
+        type: string
+        description:
+          en: Deployment name
+          zh: 部署名称
+        required: true
+      namespace:
+        type: string
+        description:
+          en: Kubernetes namespace
+          zh: Kubernetes命名空间
+        default: "default"
+      image:
+        type: string
+        description:
+          en: New image to deploy (optional)
+          zh: 要部署的新镜像（可选）
+        default: null
+      replicas:
+        type: integer
+        description:
+          en: Number of replicas
+          zh: 副本数量
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== Kubernetes Deployment: {{deployment}} ==="
+        
+        if [ -n "{{image}}" ] && [ "{{image}}" != "null" ]; then
+          echo "Updating image to {{image}}..."
+          kubectl set image deployment/{{deployment}} -n {{namespace}} {{deployment}}={{image}} 2>&1
+        fi
+        
+        if [ -n "{{replicas}}" ] && [ "{{replicas}}" != "null" ]; then
+          echo "Scaling to {{replicas}} replicas..."
+          kubectl scale deployment/{{deployment}} -n {{namespace}} --replicas={{replicas}} 2>&1
+        fi
+        
+        echo ""
+        echo "=== Deployment Status ==="
+        kubectl rollout status deployment/{{deployment}} -n {{namespace}} 2>&1
+        echo ""
+        
+        echo "=== Current Pods ==="
+        kubectl get pods -n {{namespace}} -l app={{deployment}} -o wide 2>/dev/null
+  - name: k8s_rollback
+    description:
+      en: Rollback Kubernetes deployment to previous version
+      zh: 将Kubernetes部署回滚到先前版本
+    parameters:
+      deployment:
+        type: string
+        description:
+          en: Deployment name
+          zh: 部署名称
+        required: true
+      namespace:
+        type: string
+        description:
+          en: Kubernetes namespace
+          zh: Kubernetes命名空间
+        default: "default"
+      revision:
+        type: integer
+        description:
+          en: Specific revision to rollback to (optional)
+          zh: 要回滚到的特定修订版（可选）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== Rollback Deployment: {{deployment}} ==="
+        
+        if [ -n "{{revision}}" ] && [ "{{revision}}" != "null" ]; then
+          echo "Rolling back to revision {{revision}}..."
+          kubectl rollout undo deployment/{{deployment}} -n {{namespace}} --to-revision={{revision}} 2>&1
+        else
+          echo "Rolling back to previous revision..."
+          kubectl rollout undo deployment/{{deployment}} -n {{namespace}} 2>&1
+        fi
+        
+        echo ""
+        echo "=== Rollout History ==="
+        kubectl rollout history deployment/{{deployment}} -n {{namespace}} 2>&1
+        echo ""
+        
+        echo "=== Current Status ==="
+        kubectl rollout status deployment/{{deployment}} -n {{namespace}} 2>&1
+  - name: health_check
+    description:
+      en: Perform health checks on deployed services
+      zh: 对已部署的服务执行健康检查
+    parameters:
+      url:
+        type: string
+        description:
+          en: Health check endpoint URL
+          zh: 健康检查端点URL
+        required: true
+      timeout:
+        type: integer
+        description:
+          en: Timeout in seconds
+          zh: 超时秒数
+        default: 30
+      retries:
+        type: integer
+        description:
+          en: Number of retries
+          zh: 重试次数
+        default: 3
+    implementation:
+      type: shell
+      command: |
+        echo "=== Health Check: {{url}} ==="
+        
+        ATTEMPT=0
+        MAX_ATTEMPTS={{retries}}
+        TIMEOUT={{timeout}}
+        
+        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          ATTEMPT=$((ATTEMPT + 1))
+          echo "Attempt $ATTEMPT/$MAX_ATTEMPTS..."
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time $TIMEOUT "{{url}}" 2>/dev/null)
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Health check passed (HTTP $HTTP_CODE)"
+            exit 0
+          else
+            echo "❌ Health check failed (HTTP $HTTP_CODE)"
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              echo "Retrying in 5 seconds..."
+              sleep 5
+            fi
+          fi
+        done
+        
+        echo "❌ Health check failed after $MAX_ATTEMPTS attempts"
+        exit 1
+  - name: docker_deploy
+    description:
+      en: Deploy Docker containers with compose or standalone
+      zh: 使用compose或独立部署Docker容器
+    parameters:
+      action:
+        type: string
+        enum: [up, down, restart, rebuild]
+        description:
+          en: Deployment action
+          zh: 部署操作
+        default: up
+      service:
+        type: string
+        description:
+          en: Specific service name (optional)
+          zh: 特定服务名称（可选）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        COMPOSE_CMD=""
+        if command -v docker-compose &> /dev/null; then
+          COMPOSE_CMD="docker-compose"
+        elif docker compose version &> /dev/null; then COMPOSE_CMD="docker compose"
+        else
+          echo "Neither docker-compose nor docker compose available"
+          exit 1
+        fi
+        
+        echo "=== Docker Deployment ==="
+        
+        case "{{action}}" in
+          "up")
+            echo "Starting services..."
+            $COMPOSE_CMD up -d {{service}} 2>&1
+            ;;
+          "down")
+            echo "Stopping services..."
+            $COMPOSE_CMD down {{service}} 2>&1
+            ;;
+          "restart")
+            echo "Restarting services..."
+            $COMPOSE_CMD restart {{service}} 2>&1
+            ;;
+          "rebuild")
+            echo "Rebuilding and starting services..."
+            $COMPOSE_CMD up -d --build {{service}} 2>&1
+            ;;
+        esac
+        
+        echo ""
+        echo "=== Service Status ==="
+        $COMPOSE_CMD ps 2>/dev/null
+  - name: ssh_deploy
+    description:
+      en: Deploy via SSH to remote servers
+      zh: 通过SSH部署到远程服务器
+    parameters:
+      host:
+        type: string
+        description:
+          en: Remote host (user@hostname)
+          zh: 远程主机（user@hostname）
+        required: true
+      command:
+        type: string
+        description:
+          en: Command to execute on remote host
+          zh: 在远程主机上执行的命令
+        required: true
+      key_file:
+        type: string
+        description:
+          en: SSH private key file path
+          zh: SSH私钥文件路径
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== SSH Deployment to {{host}} ==="
+        
+        SSH_OPTS="-o ConnectTimeout=10 -o StrictHostKeyChecking=no"
+        if [ -n "{{key_file}}" ] && [ "{{key_file}}" != "null" ]; then
+          SSH_OPTS="$SSH_OPTS -i {{key_file}}"
+        fi
+        
+        echo "Executing: {{command}}"
+        echo ""
+        
+        ssh $SSH_OPTS {{host}} "{{command}}" 2>&1
+  - name: deploy_notify
+    description:
+      en: Send deployment notifications via webhook
+      zh: 通过Webhook发送部署通知
+    parameters:
+      webhook_url:
+        type: string
+        description:
+          en: Webhook URL (Slack, Teams, etc.)
+          zh: Webhook URL（Slack、Teams等）
+        required: true
+      message:
+        type: string
+        description:
+          en: Notification message
+          zh: 通知消息
+        required: true
+      status:
+        type: string
+        enum: [success, failure, warning, info]
+        description:
+          en: Deployment status
+          zh: 部署状态
+        default: info
+    implementation:
+      type: shell
+      command: |
+        echo "=== Sending Deployment Notification ==="
+        
+        case "{{status}}" in
+          "success") EMOJI="✅" ;;
+          "failure") EMOJI="❌" ;;
+          "warning") EMOJI="⚠️" ;;
+          "info") EMOJI="ℹ️" ;;
+        esac
+        
+        PAYLOAD="{\"text\": \"$EMOJI {{message}}\"}"
+        
+        curl -s -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "{{webhook_url}}" 2>&1
+        
+        echo "Notification sent"

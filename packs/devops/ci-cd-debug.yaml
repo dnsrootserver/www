@@ -1,0 +1,287 @@
+version: 1.1.0
+premium: true
+name: CI/CD Debug
+description:
+  en: Debug CI/CD pipeline failures, analyze build logs, and troubleshoot deployment issues.
+  zh: 调试CI/CD流水线故障，分析构建日志，并排查部署问题。
+triggers:
+  en:
+    - "ci cd debug"
+    - "pipeline debug"
+    - "build debug"
+    - "deployment debug"
+    - "ci/cd"
+  zh:
+    - "CI/CD调试"
+    - "流水线调试"
+    - "构建调试"
+    - "部署调试"
+    - "CI/CD"
+tools:
+  - name: github_actions
+    description:
+      en: Debug GitHub Actions workflow failures
+      zh: 调试GitHub Actions工作流故障
+    parameters:
+      repo:
+        type: string
+        description:
+          en: GitHub repository (owner/repo)
+          zh: GitHub仓库（owner/repo）
+        required: true
+      workflow:
+        type: string
+        description:
+          en: Workflow name or filename
+          zh: 工作流名称或文件名
+        default: null
+      limit:
+        type: integer
+        description:
+          en: Number of recent runs to show
+          zh: 显示的最近运行次数
+        default: 5
+    implementation:
+      type: shell
+      command: |
+        echo "=== GitHub Actions Debug: {{repo}} ==="
+        echo ""
+        
+        if [ -n "{{workflow}}" ] && [ "{{workflow}}" != "null" ]; then
+          echo "=== Workflow: {{workflow}} ==="
+          gh run list --repo {{repo}} --workflow {{workflow}} --limit {{limit}} 2>/dev/null || echo "GitHub CLI not available or not authenticated"
+        else
+          echo "=== Recent Workflow Runs ==="
+          gh run list --repo {{repo}} --limit {{limit}} 2>/dev/null || echo "GitHub CLI not available or not authenticated"
+        fi
+        
+        echo ""
+        echo "=== Failed Jobs ==="
+        gh run list --repo {{repo}} --status failure --limit 3 2>/dev/null | head -10 || echo "Cannot retrieve failed jobs"
+  - name: gitlab_ci
+    description:
+      en: Debug GitLab CI pipeline failures
+      zh: 调试GitLab CI流水线故障
+    parameters:
+      project_id:
+        type: string
+        description:
+          en: GitLab project ID or path
+          zh: GitLab项目ID或路径
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of recent pipelines to show
+          zh: 显示的最近流水线数量
+        default: 5
+    implementation:
+      type: shell
+      command: |
+        echo "=== GitLab CI Debug: {{project_id}} ==="
+        echo ""
+        
+        # Check if gitlab CLI is available
+        if command -v glab &> /dev/null; then
+          echo "=== Recent Pipelines ==="
+          glab ci list --project {{project_id}} --limit {{limit}} 2>/dev/null || echo "Cannot retrieve pipelines"
+        else
+          echo "GitLab CLI (glab) not available"
+          echo "Install with: brew install glab"
+        fi
+        
+        echo ""
+        echo "=== Manual Debug Steps ==="
+        echo "1. Check pipeline logs in GitLab UI"
+        echo "2. Verify .gitlab-ci.yml syntax"
+        echo "3. Check runner status"
+        echo "4. Verify environment variables"
+  - name: jenkins_debug
+    description:
+      en: Debug Jenkins build failures
+      zh: 调试Jenkins构建故障
+    parameters:
+      job_name:
+        type: string
+        description:
+          en: Jenkins job name
+          zh: Jenkins任务名称
+        required: true
+      build_number:
+        type: integer
+        description:
+          en: Build number (default: last build)
+          zh: 构建编号（默认：最后构建）
+        default: null
+      jenkins_url:
+        type: string
+        description:
+          en: Jenkins URL (default: http://localhost:8080)
+          zh: Jenkins URL（默认：http://localhost:8080）
+        default: "http://localhost:8080"
+    implementation:
+      type: shell
+      command: |
+        echo "=== Jenkins Debug: {{job_name}} ==="
+        echo ""
+        
+        JENKINS_URL="{{jenkins_url}}"
+        
+        BUILD_NUM="{{build_number}}"
+        if [ -z "$BUILD_NUM" ] || [ "$BUILD_NUM" = "null" ]; then
+          BUILD_NUM="lastBuild"
+        fi
+        
+        echo "=== Build Info ==="
+        curl -s "$JENKINS_URL/job/{{job_name}}/$BUILD_NUM/api/json" 2>/dev/null | python3 -m json.tool 2>/dev/null | grep -E "result|duration|timestamp" || echo "Cannot retrieve build info"
+        
+        echo ""
+        echo "=== Console Output (last 50 lines) ==="
+        curl -s "$JENKINS_URL/job/{{job_name}}/$BUILD_NUM/consoleText" 2>/dev/null | tail -50 || echo "Cannot retrieve console output"
+  - name: docker_build_debug
+    description:
+      en: Debug Docker build failures and optimize builds
+      zh: 调试Docker构建故障并优化构建
+    parameters:
+      dockerfile:
+        type: string
+        description:
+          en: Path to Dockerfile
+          zh: Dockerfile路径
+        default: "Dockerfile"
+      context:
+        type: string
+        description:
+          en: Build context directory
+          zh: 构建上下文目录
+        default: "."
+    implementation:
+      type: shell
+      command: |
+        echo "=== Docker Build Debug ==="
+        echo ""
+        
+        if [ ! -f "{{dockerfile}}" ]; then
+          echo "❌ Dockerfile not found: {{dockerfile}}"
+          exit 1
+        fi
+        
+        echo "=== Dockerfile Analysis ==="
+        echo "Lines: $(wc -l < "{{dockerfile}}")"
+        echo "Stages: $(grep -c "^FROM " "{{dockerfile}}")"
+        echo ""
+        
+        echo "=== Base Images ==="
+        grep "^FROM " "{{dockerfile}}"
+        echo ""
+        
+        echo "=== Potential Issues ==="
+        # Check for common issues
+        if grep -q "RUN apt-get update" "{{dockerfile}}" && ! grep -q "rm -rf /var/lib/apt/lists/*" "{{dockerfile}}"; then
+          echo "⚠️  Consider cleaning apt cache: rm -rf /var/lib/apt/lists/*"
+        fi
+        
+        if grep -q "COPY \. \." "{{dockerfile}}"; then
+          echo "⚠️  Consider using .dockerignore to exclude unnecessary files"
+        fi
+        
+        echo ""
+        echo "=== Build Test ==="
+        docker build -f "{{dockerfile}}" -t debug-build "{{context}}" 2>&1 | tail -30
+  - name: k8s_debug
+    description:
+      en: Debug Kubernetes deployment issues
+      zh: 调试Kubernetes部署问题
+    parameters:
+      resource:
+        type: string
+        description:
+          en: Resource type (pod, deployment, service)
+          zh: 资源类型（pod、deployment、service）
+        required: true
+      name:
+        type: string
+        description:
+          en: Resource name
+          zh: 资源名称
+        required: true
+      namespace:
+        type: string
+        description:
+          en: Kubernetes namespace
+          zh: Kubernetes命名空间
+        default: "default"
+    implementation:
+      type: shell
+      command: |
+        echo "=== Kubernetes Debug: {{resource}}/{{name}} ==="
+        echo ""
+        
+        echo "=== Resource Details ==="
+        kubectl describe {{resource}} {{name}} -n {{namespace}} 2>/dev/null | head -50
+        
+        echo ""
+        echo "=== Events ==="
+        kubectl get events -n {{namespace}} --field-selector involvedObject.name={{name}} --sort-by='.lastTimestamp' 2>/dev/null | tail -10
+        
+        if [ "{{resource}}" = "pod" ]; then
+          echo ""
+          echo "=== Pod Logs ==="
+          kubectl logs {{name}} -n {{namespace}} --tail=50 2>&1
+          
+          echo ""
+          echo "=== Container Status ==="
+          kubectl get pod {{name}} -n {{namespace}} -o jsonpath='{.status.containerStatuses[*]}' 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "Cannot retrieve container status"
+        fi
+  - name: ansible_debug
+    description:
+      en: Debug Ansible playbook failures
+      zh: 调试Ansible剧本故障
+    parameters:
+      playbook:
+        type: string
+        description:
+          en: Path to playbook
+          zh: 剧本路径
+        required: true
+      inventory:
+        type: string
+        description:
+          en: Inventory file or host pattern
+          zh: 清单文件或主机模式
+        default: "localhost"
+      check_mode:
+        type: boolean
+        description:
+          en: Run in check mode (dry-run)
+          zh: 以检查模式运行（试运行）
+        default: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== Ansible Debug: {{playbook}} ==="
+        echo ""
+        
+        if [ ! -f "{{playbook}}" ]; then
+          echo "❌ Playbook not found: {{playbook}}"
+          exit 1
+        fi
+        
+        echo "=== Playbook Syntax Check ==="
+        ansible-playbook --syntax-check {{playbook}} 2>&1
+        
+        echo ""
+        if [ "{{check_mode}}" = "true" ]; then
+          echo "=== Dry Run (Check Mode) ==="
+          ansible-playbook -i {{inventory}} {{playbook}} --check --diff 2>&1 | tail -50
+        else
+          echo "=== Playbook Execution ==="
+          ansible-playbook -i {{inventory}} {{playbook}} -v 2>&1 | tail -50
+        fi
+        
+        echo ""
+        echo "=== Common Issues ==="
+        echo "1. Check inventory format"
+        echo "2. Verify SSH connectivity"
+        echo "3. Check variable definitions"
+        echo "4. Verify permissions"

@@ -1,0 +1,307 @@
+version: 1.1.0
+premium: true
+name: Process Manager
+description:
+  en: Manage system processes, monitor resource usage, and troubleshoot performance issues.
+  zh: 管理系统进程，监控资源使用，并排查性能问题。
+triggers:
+  en:
+    - "process manager"
+    - "process monitor"
+    - "system processes"
+    - "ps aux"
+    - "top processes"
+  zh:
+    - "进程管理器"
+    - "进程监控"
+    - "系统进程"
+    - "ps aux"
+    - "顶部进程"
+tools:
+  - name: process_list
+    description:
+      en: List running processes with various sorting options
+      zh: 列出运行中的进程，提供多种排序选项
+    parameters:
+      sort_by:
+        type: string
+        enum: [cpu, memory, pid, time, name]
+        description:
+          en: Sort order for processes
+          zh: 进程的排序顺序
+        default: cpu
+      top_n:
+        type: integer
+        description:
+          en: Number of top processes to show
+          zh: 显示的顶部进程数量
+        default: 20
+      user:
+        type: string
+        description:
+          en: Filter by user
+          zh: 按用户过滤
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== Process List ==="
+        echo ""
+        
+        PS_CMD="ps aux"
+        if [ -n "{{user}}" ] && [ "{{user}}" != "null" ]; then
+          PS_CMD="ps aux | grep '^{{user}}'"
+        fi
+        
+        case "{{sort_by}}" in
+          "cpu")
+            $PS_CMD --sort=-%cpu 2>/dev/null | head -$(($top_n + 1)) || $PS_CMD | head -$(($top_n + 1))
+            ;;
+          "memory")
+            $PS_CMD --sort=-%mem 2>/dev/null | head -$(($top_n + 1)) || $PS_CMD | head -$(($top_n + 1))
+            ;;
+          "pid")
+            $PS_CMD --sort=pid 2>/dev/null | head -$(($top_n + 1)) || $PS_CMD | head -$(($top_n + 1))
+            ;;
+          "time")
+            $PS_CMD --sort=-time 2>/dev/null | head -$(($top_n + 1)) || $PS_CMD | head -$(($top_n + 1))
+            ;;
+          "name")
+            $PS_CMD --sort=comm 2>/dev/null | head -$(($top_n + 1)) || $PS_CMD | head -$(($top_n + 1))
+            ;;
+        esac
+  - name: process_info
+    description:
+      en: Get detailed information about a specific process
+      zh: 获取特定进程的详细信息
+    parameters:
+      pid:
+        type: integer
+        description:
+          en: Process ID
+          zh: 进程ID
+        required: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== Process Info: PID {{pid}} ==="
+        echo ""
+        
+        if [ ! -d "/proc/{{pid}}" ]; then
+          echo "❌ Process {{pid}} not found"
+          exit 1
+        fi
+        
+        echo "=== Process Details ==="
+        ps -p {{pid}} -o pid,ppid,user,%cpu,%mem,vsz,rss,stat,start,time,command 2>/dev/null || echo "Cannot retrieve process details"
+        
+        echo ""
+        echo "=== Process Status ==="
+        cat /proc/{{pid}}/status 2>/dev/null | head -20
+        
+        echo ""
+        echo "=== Open Files ==="
+        ls -la /proc/{{pid}}/fd 2>/dev/null | head -10 || echo "Cannot list open files"
+        
+        echo ""
+        echo "=== Memory Map (summary) ==="
+        cat /proc/{{pid}}/maps 2>/dev/null | awk '{print $6}' | sort | uniq -c | sort -rn | head -10 || echo "Cannot read memory map"
+  - name: process_tree
+    description:
+      en: Show process tree hierarchy
+      zh: 显示进程树层次结构
+    parameters:
+      pid:
+        type: integer
+        description:
+          en: Root PID (optional, shows full tree if not specified)
+          zh: 根PID（可选，未指定则显示完整树）
+        default: null
+      show_threads:
+        type: boolean
+        description:
+          en: Show threads
+          zh: 显示线程
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Process Tree ==="
+        echo ""
+        
+        if [ -n "{{pid}}" ] && [ "{{pid}}" != "null" ]; then
+          echo "=== Tree for PID {{pid}} ==="
+          pstree -p {{pid}} 2>/dev/null || ps -forest -p {{pid}} 2>/dev/null || echo "Cannot generate process tree"
+        else
+          echo "=== Full Process Tree ==="
+          pstree 2>/dev/null | head -50 || ps -forest 2>/dev/null | head -50
+        fi
+        
+        if [ "{{show_threads}}" = "true" ]; then
+          echo ""
+          echo "=== Thread Summary ==="
+          ps -eLf 2>/dev/null | head -20 || echo "Cannot show threads"
+        fi
+  - name: kill_process
+    description:
+      en: Kill processes by PID or name
+      zh: 通过PID或名称终止进程
+    parameters:
+      target:
+        type: string
+        description:
+          en: PID or process name
+          zh: PID或进程名称
+        required: true
+      signal:
+        type: string
+        enum: [TERM, KILL, HUP, INT, QUIT]
+        description:
+          en: Signal to send
+          zh: 要发送的信号
+        default: TERM
+      force:
+        type: boolean
+        description:
+          en: Force kill (SIGKILL)
+          zh: 强制终止（SIGKILL）
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Process Termination ==="
+        echo ""
+        
+        SIGNAL="{{signal}}"
+        if [ "{{force}}" = "true" ]; then
+          SIGNAL="KILL"
+        fi
+        
+        case "$SIGNAL" in
+          "TERM") SIG_FLAG="-TERM" ;;
+          "KILL") SIG_FLAG="-KILL" ;;
+          "HUP") SIG_FLAG="-HUP" ;;
+          "INT") SIG_FLAG="-INT" ;;
+          "QUIT") SIG_FLAG="-QUIT" ;;
+        esac
+        
+        if [[ "{{target}}" =~ ^[0-9]+$ ]]; then
+          # It's a PID
+          echo "Sending SIG$SIGNAL to PID {{target}}..."
+          if ps -p {{target}} > /dev/null 2>&1; then
+            kill $SIG_FLAG {{target}} 2>&1 && echo "✅ Signal sent" || echo "❌ Failed to send signal"
+          else
+            echo "❌ Process {{target}} not found"
+          fi
+        else
+          # It's a process name
+          echo "Sending SIG$SIGNAL to processes matching '{{target}}'..."
+          pkill $SIG_FLAG "{{target}}" 2>&1 && echo "✅ Signal sent" || echo "❌ No matching processes found"
+        fi
+  - name: resource_usage
+    description:
+      en: Monitor system resource usage by processes
+      zh: 监控进程的系统资源使用情况
+    parameters:
+      interval:
+        type: integer
+        description:
+          en: Refresh interval in seconds
+          zh: 刷新间隔秒数
+        default: 1
+      count:
+        type: integer
+        description:
+          en: Number of samples to take
+          zh: 要采集的样本数量
+        default: 5
+    implementation:
+      type: shell
+      command: |
+        echo "=== Resource Usage Monitoring ==="
+        echo ""
+        
+        echo "=== CPU Usage ({{count}} samples, {{interval}}s interval) ==="
+        for i in $(seq 1 {{count}}); do
+          echo "Sample $i:"
+          top -bn1 | head -5
+          echo ""
+          if [ $i -lt {{count}} ]; then
+            sleep {{interval}}
+          fi
+        done
+        
+        echo ""
+        echo "=== Memory Usage ==="
+        free -h 2>/dev/null || vm_stat 2>/dev/null
+        
+        echo ""
+        echo "=== Top CPU Consumers ==="
+        ps aux --sort=-%cpu 2>/dev/null | head -6 || ps aux | head -6
+        
+        echo ""
+        echo "=== Top Memory Consumers ==="
+        ps aux --sort=-%mem 2>/dev/null | head -6 || ps aux | head -6
+  - name: zombie_processes
+    description:
+      en: Find and manage zombie processes
+      zh: 查找和管理僵尸进程
+    parameters:
+      action:
+        type: string
+        enum: [list, kill, parent]
+        description:
+          en: Action to perform
+          zh: 要执行的操作
+        default: list
+    implementation:
+      type: shell
+      command: |
+        echo "=== Zombie Process Management ==="
+        echo ""
+        
+        ZOMBIES=$(ps aux | awk '$8=="Z" {print $2}')
+        
+        if [ -z "$ZOMBIES" ]; then
+          echo "✅ No zombie processes found"
+          exit 0
+        fi
+        
+        echo "=== Zombie Processes Found ==="
+        ps aux | awk '$8=="Z" {print}'
+        
+        case "{{action}}" in
+          "list")
+            echo ""
+            echo "=== Zombie Details ==="
+            for pid in $ZOMBIES; do
+              echo "PID $pid:"
+              ps -p $pid -o pid,ppid,user,stat,command 2>/dev/null
+              echo ""
+            done
+            ;;
+          "parent")
+            echo ""
+            echo "=== Parent Processes ==="
+            for pid in $ZOMBIES; do
+              PPID=$(ps -p $pid -o ppid= 2>/dev/null)
+              if [ -n "$PPID" ]; then
+                echo "Zombie PID $pid -> Parent PID $PPID:"
+                ps -p $PPID -o pid,user,command 2>/dev/null
+                echo ""
+              fi
+            done
+            ;;
+          "kill")
+            echo ""
+            echo "=== Killing Parent Processes ==="
+            for pid in $ZOMBIES; do
+              PPID=$(ps -p $pid -o ppid= 2>/dev/null)
+              if [ -n "$PPID" ] && [ "$PPID" -gt 1 ]; then
+                echo "Sending SIGCHLD to parent PID $PPID..."
+                kill -SIGCHLD $PPID 2>/dev/null
+              fi
+            done
+            echo "✅ Sent SIGCHLD to parent processes"
+            ;;
+        esac

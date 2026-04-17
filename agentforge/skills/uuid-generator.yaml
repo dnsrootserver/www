@@ -1,0 +1,23 @@
+name: uuid-generator
+version: "1.1.0"
+description: "Generate UUIDs (v1, v4) and random strings"
+description_zh: "生成 UUID（v1, v4）和随机字符串"
+author: agentforge
+category: developer
+triggers: ["uuid", "generate uuid", "random id", "unique id"]
+triggers_zh: ["生成uuid", "随机id", "唯一标识"]
+tags: [developer, utility]
+steps:
+  - tool: shell
+    params:
+      command: |
+        COUNT=$(echo "{{ input }}" | grep -oE '[0-9]+' | head -1)
+        COUNT=${COUNT:-1}
+        echo "Generated $COUNT UUID(s):"
+        for i in $(seq 1 $COUNT); do
+          python3 -c "import uuid; print(uuid.uuid4())"
+        done
+      timeout: 5
+    output: uuids
+  - tool: output
+    params: {message: "{{ uuids.stdout }}", format: panel, title: "UUID Generator"}

@@ -1,0 +1,170 @@
+version: 1.1.0
+premium: true
+name: GitHub Trending
+description:
+  en: Fetch trending repositories on GitHub, search repositories, and get repository details.
+  zh: 获取GitHub热门仓库，搜索仓库，获取仓库详情。
+tools:
+  - name: get_trending_repos
+    description:
+      en: Get currently trending repositories on GitHub
+      zh: 获取GitHub当前热门仓库
+    parameters:
+      language:
+        type: string
+        description:
+          en: Filter by programming language
+          zh: 按编程语言过滤
+        default: null
+      since:
+        type: string
+        enum: [daily, weekly, monthly]
+        description:
+          en: Time range for trending
+          zh: 热门时间范围
+        default: daily
+      limit:
+        type: integer
+        description:
+          en: Number of repositories to return
+          zh: 返回仓库数量
+        default: 25
+    implementation:
+      type: shell
+      command: |
+        # Use GitHub trending API or scrape trending page
+        if [ -n "{{language}}" ] && [ "{{language}}" != "null" ]; then
+          url="https://api.github.com/search/repositories?q=language:{{language}}+created:>$(date -d '-1 day' +%Y-%m-%d)&sort=stars&order=desc&per_page={{limit}}"
+        else
+          url="https://api.github.com/search/repositories?q=created:>$(date -d '-1 day' +%Y-%m-%d)&sort=stars&order=desc&per_page={{limit}}"
+        fi
+        
+        curl -s "$url" | jq '.items[] | {
+          name: .full_name,
+          description: .description,
+          url: .html_url,
+          stars: .stargazers_count,
+          forks: .forks_count,
+          language: .language,
+          created_at: .created_at,
+          updated_at: .updated_at,
+          topics: .topics
+        }'
+
+  - name: search_repositories
+    description:
+      en: Search GitHub repositories by keyword
+      zh: 按关键词搜索GitHub仓库
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      language:
+        type: string
+        description:
+          en: Filter by language
+          zh: 按语言过滤
+        default: null
+      sort:
+        type: string
+        enum: [stars, forks, updated]
+        description:
+          en: Sort results by
+          zh: 结果排序方式
+        default: stars
+      order:
+        type: string
+        enum: [desc, asc]
+        description:
+          en: Sort order
+          zh: 排序顺序
+        default: desc
+      limit:
+        type: integer
+        description:
+          en: Number of results to return
+          zh: 返回结果数量
+        default: 30
+    implementation:
+      type: shell
+      command: |
+        query="{{query}}"
+        if [ -n "{{language}}" ] && [ "{{language}}" != "null" ]; then
+          query="$query+language:{{language}}"
+        fi
+        
+        curl -s "https://api.github.com/search/repositories?q=$query&sort={{sort}}&order={{order}}&per_page={{limit}}" | jq '.items[] | {
+          name: .full_name,
+          description: .description,
+          url: .html_url,
+          stars: .stargazers_count,
+          forks: .forks_count,
+          language: .language,
+          created_at: .created_at,
+          updated_at: .updated_at,
+          open_issues: .open_issues_count,
+          topics: .topics
+        }'
+
+  - name: get_repo_details
+    description:
+      en: Get detailed information about a GitHub repository
+      zh: 获取GitHub仓库的详细信息
+    parameters:
+      owner:
+        type: string
+        description:
+          en: Repository owner
+          zh: 仓库所有者
+        required: true
+      repo:
+        type: string
+        description:
+          en: Repository name
+          zh: 仓库名称
+        required: true
+    implementation:
+      type: shell
+      command: |
+        curl -s "https://api.github.com/repos/{{owner}}/{{repo}}" | jq '{
+          name: .full_name,
+          description: .description,
+          url: .html_url,
+          stars: .stargazers_count,
+          forks: .forks_count,
+          watchers: .watchers_count,
+          language: .language,
+          license: .license.name,
+          created_at: .created_at,
+          updated_at: .updated_at,
+          pushed_at: .pushed_at,
+          open_issues: .open_issues_count,
+          default_branch: .default_branch,
+          topics: .topics,
+          readme_url: (.html_url + "/blob/main/README.md")
+        }'
+
+  - name: get_repo_readme
+    description:
+      en: Get the README content of a GitHub repository
+      zh: 获取GitHub仓库的README内容
+    parameters:
+      owner:
+        type: string
+        description:
+          en: Repository owner
+          zh: 仓库所有者
+        required: true
+      repo:
+        type: string
+        description:
+          en: Repository name
+          zh: 仓库名称
+        required: true
+    implementation:
+      type: shell
+      command: |
+        curl -s "https://api.github.com/repos/{{owner}}/{{repo}}/readme" | jq -r '.content' | base64 -d

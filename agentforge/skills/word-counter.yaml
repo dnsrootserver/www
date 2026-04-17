@@ -1,0 +1,70 @@
+name: word-counter
+version: "1.1.0"
+description: "Detailed word frequency analysis and statistics"
+description_zh: "详细的单词频率分析和统计"
+author: agentforge
+category: analysis
+triggers: ["word frequency", "word analysis", "count word frequency", "word statistics", "text frequency"]
+triggers_zh: ["词频分析", "单词分析", "单词频率统计", "文本频率"]
+tags: [text, analysis, statistics]
+steps:
+  - tool: python
+    params:
+      code: |
+        import re
+        from collections import Counter
+        
+        text = """{{ input }}"""
+        if not text.strip():
+            text = "This is a sample text for word frequency analysis. The quick brown fox jumps over the lazy dog. This text contains repeated words for analysis purposes."
+        
+        # Clean and tokenize
+        words = re.findall(r'\b[a-zA-Z]+\b', text.lower())
+        
+        if not words:
+            print("No words found in the input.")
+        else:
+            # Count frequencies
+            word_freq = Counter(words)
+            total_words = len(words)
+            unique_words = len(word_freq)
+            
+            # Top 20 words
+            top_words = word_freq.most_common(20)
+            
+            # Average word length
+            avg_length = sum(len(w) for w in words) / total_words
+            
+            # Word length distribution
+            length_dist = Counter(len(w) for w in words)
+            
+            output = f"""📊 Word Frequency Analysis
+
+📈 Overall Statistics:
+Total words: {total_words}
+Unique words: {unique_words}
+Average word length: {avg_length:.2f} characters
+
+🏆 Top 20 Most Frequent Words:
+"""
+            for i, (word, count) in enumerate(top_words, 1):
+                bar = '█' * (count * 20 // top_words[0][1])
+                output += f"{i:2}. {word:15} {count:4} {bar}\n"
+            
+            output += "\n📏 Word Length Distribution:\n"
+            for length in sorted(length_dist.keys()):
+                count = length_dist[length]
+                bar = '█' * (count * 20 // max(length_dist.values()))
+                output += f"{length:2} chars: {count:4} {bar}\n"
+            
+            # Vocabulary richness
+            richness = unique_words / total_words * 100
+            output += f"\n📚 Vocabulary Richness: {richness:.1f}%"
+            
+            print(output)
+      var: result
+  - tool: output
+    params:
+      message: "{{ result }}"
+      format: panel
+      title: "Word Frequency Analysis"

@@ -1,0 +1,32 @@
+name: json-formatter
+version: "1.1.0"
+description: "Format, validate, minify, or query JSON data"
+description_zh: "格式化、验证、压缩或查询 JSON 数据"
+author: agentforge
+category: developer
+triggers: ["format json", "json pretty", "json minify", "validate json"]
+triggers_zh: ["格式化json", "json格式化", "压缩json", "验证json"]
+tags: [json, developer, utility]
+steps:
+  - tool: log
+    params: {message: "📋 Processing JSON...", level: info}
+  - tool: shell
+    params:
+      command: |
+        INPUT="{{ input }}"
+        JSON=$(echo "$INPUT" | grep -oE '\{.*\}|\[.*\]' | head -1)
+        if [ -z "$JSON" ]; then
+          echo "Paste JSON below:"
+        else
+          if echo "$INPUT" | grep -qi "minif"; then
+            echo "$JSON" | python3 -c "import sys,json; print(json.dumps(json.loads(sys.stdin.read()),separators=(',',':')))"
+          elif echo "$INPUT" | grep -qi "valid"; then
+            echo "$JSON" | python3 -c "import sys,json; json.loads(sys.stdin.read()); print('✅ Valid JSON')"
+          else
+            echo "$JSON" | python3 -m json.tool 2>/dev/null || echo "Invalid JSON"
+          fi
+        fi
+      timeout: 5
+    output: result
+  - tool: output
+    params: {message: "{{ result.stdout }}", format: code, lang: json}

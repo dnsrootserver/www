@@ -1,0 +1,100 @@
+version: 1.1.0
+premium: true
+name: Twitter Monitor
+description:
+  en: Monitor Twitter/X keywords and hashtags, track mentions and trending topics in real-time.
+  zh: 监控Twitter/X关键词和话题标签，实时追踪提及和热门话题。
+tools:
+  - name: search_tweets
+    description:
+      en: Search Twitter/X for keywords, hashtags, or mentions
+      zh: 在Twitter/X上搜索关键词、话题标签或提及
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query (keywords, hashtags, or @mentions)
+          zh: 搜索查询（关键词、话题标签或@提及）
+        required: true
+      count:
+        type: integer
+        description:
+          en: Number of tweets to return (max 100)
+          zh: 返回的推文数量（最多100）
+        default: 20
+      result_type:
+        type: string
+        enum: [recent, popular, mixed]
+        description:
+          en: Type of results to return
+          zh: 返回结果类型
+        default: recent
+      lang:
+        type: string
+        description:
+          en: Language filter (ISO 639-1 code, e.g., 'en', 'zh')
+          zh: 语言过滤器（ISO 639-1代码，如'en'、'zh'）
+        default: en
+    implementation:
+      type: shell
+      command: |
+        # Use Twitter's public search via nitter or similar
+        # Note: Requires proper API keys for production use
+        echo "Searching Twitter/X for: {{query}}"
+        curl -s "https://api.twitter.com/2/tweets/search/recent?query={{query}}&max_results={{count}}&tweet.fields=created_at,public_metrics" \
+          -H "Authorization: Bearer $TWITTER_BEARER_TOKEN" | jq '.data[] | {id: .id, text: .text, created_at: .created_at, retweets: .public_metrics.retweet_count, likes: .public_metrics.like_count}' 2>/dev/null || echo "Twitter API requires authentication. Please set TWITTER_BEARER_TOKEN environment variable."
+
+  - name: get_trending
+    description:
+      en: Get current trending topics on Twitter/X
+      zh: 获取Twitter/X当前热门话题
+    parameters:
+      woeid:
+        type: integer
+        description:
+          en: Where On Earth ID (1 for worldwide, 23424977 for USA, 23424764 for China)
+          zh: 地球位置ID（1表示全球，23424977表示美国，23424764表示中国）
+        default: 1
+    implementation:
+      type: shell
+      command: |
+        echo "Fetching trending topics..."
+        curl -s "https://api.twitter.com/2/trends/place?id={{woeid}}" \
+          -H "Authorization: Bearer $TWITTER_BEARER_TOKEN" | jq '.[0].trends[] | {name: .name, tweet_volume: .tweet_volume, url: .url}' 2>/dev/null || echo "Twitter API requires authentication. Please set TWITTER_BEARER_TOKEN environment variable."
+
+  - name: monitor_keyword
+    description:
+      en: Set up continuous monitoring for a keyword (creates background process)
+      zh: 为关键词设置持续监控（创建后台进程）
+    parameters:
+      keyword:
+        type: string
+        description:
+          en: Keyword to monitor
+          zh: 要监控的关键词
+        required: true
+      interval:
+        type: integer
+        description:
+          en: Check interval in minutes
+          zh: 检查间隔（分钟）
+        default: 5
+      output_file:
+        type: string
+        description:
+          en: File to save results
+          zh: 保存结果的文件
+        default: twitter_monitor.log
+    implementation:
+      type: shell
+      command: |
+        echo "Starting Twitter monitoring for '{{keyword}}' every {{interval}} minutes..."
+        echo "Results will be saved to: {{output_file}}"
+        echo "Monitoring started at: $(date)" >> {{output_file}}
+        (while true; do
+          echo "=== $(date) ===" >> {{output_file}}
+          curl -s "https://api.twitter.com/2/tweets/search/recent?query={{keyword}}&max_results=10" \
+            -H "Authorization: Bearer $TWITTER_BEARER_TOKEN" | jq '.data[] | {text: .text, created_at: .created_at}' >> {{output_file}} 2>/dev/null
+          sleep $(({{interval}} * 60))
+        done) &
+        echo "Monitor started with PID: $!"

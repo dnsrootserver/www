@@ -1,0 +1,50 @@
+name: color-picker
+version: "1.1.0"
+description: "Generate color palettes and hex codes"
+description_zh: "生成调色板和十六进制颜色代码"
+author: agentforge
+category: creative
+triggers: ["color palette", "generate colors", "hex codes", "color picker", "random colors"]
+triggers_zh: ["调色板", "颜色生成", "十六进制颜色", "颜色选择器", "随机颜色"]
+tags: [design, colors, creative]
+steps:
+  - tool: python
+    params:
+      code: |
+        import random
+        
+        # Generate 5 random colors
+        colors = []
+        for _ in range(5):
+            r = random.randint(0, 255)
+            g = random.randint(0, 255)
+            b = random.randint(0, 255)
+            hex_color = f"#{r:02x}{g:02x}{b:02x}"
+            colors.append({
+                'hex': hex_color.upper(),
+                'rgb': f"rgb({r}, {g}, {b})",
+                'r': r, 'g': g, 'b': b
+            })
+        
+        # Create output
+        output = "🎨 Random Color Palette:\n\n"
+        for i, c in enumerate(colors, 1):
+            output += f"{i}. {c['hex']}  ({c['rgb']})\n"
+        
+        # Generate a harmonious palette (complementary)
+        base = colors[0]
+        output += "\n🌈 Harmonious Palette:\n"
+        output += f"Base: {base['hex']}\n"
+        output += f"Complementary: #{255-base['r']:02x}{255-base['g']:02x}{255-base['b']:02x}\n"
+        
+        # Analogous colors
+        output += f"Analogous 1: #{min(255, base['r']+30):02x}{min(255, base['g']+30):02x}{min(255, base['b']+30):02x}\n"
+        output += f"Analogous 2: #{max(0, base['r']-30):02x}{max(0, base['g']-30):02x}{max(0, base['b']-30):02x}\n"
+        
+        print(output)
+      var: result
+  - tool: output
+    params:
+      message: "{{ result }}"
+      format: panel
+      title: "Color Palette Generator"

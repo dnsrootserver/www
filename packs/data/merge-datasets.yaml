@@ -1,0 +1,127 @@
+version: 1.1.0
+premium: true
+name: Merge Datasets
+description:
+  en: Merge multiple CSV or JSON datasets vertically, horizontally, or by key.
+  zh: 垂直、水平或按键合并多个CSV或JSON数据集。
+tools:
+  - name: merge_csv
+    description:
+      en: Merge multiple CSV files
+      zh: 合并多个CSV文件
+    parameters:
+      files:
+        type: array
+        items:
+          type: string
+        description:
+          en: List of CSV file paths
+          zh: CSV文件路径列表
+        required: true
+      merge_type:
+        type: string
+        enum: [vertical, horizontal, key]
+        description:
+          en: Merge type (vertical: stack rows, horizontal: side by side, key: join on column)
+          zh: 合并类型（vertical：堆叠行，horizontal：并排，key：按列连接）
+        default: vertical
+      key_column:
+        type: string
+        description:
+          en: Column name to join on (for key merge)
+          zh: 连接的列名（用于按键合并）
+        default: null
+      output_file:
+        type: string
+        description:
+          en: Output file path
+          zh: 输出文件路径
+        default: "merged.csv"
+    implementation:
+      type: shell
+      command: |
+        files=({{files}})
+        if [ ${#files[@]} -lt 2 ]; then
+          echo "Error: At least 2 files required for merge"
+          exit 1
+        fi
+        case "{{merge_type}}" in
+          "vertical")
+            # Stack rows, use header from first file
+            head -1 "${files[0]}" > "{{output_file}}"
+            for f in "${files[@]}"; do
+              tail -n +2 "$f" >> "{{output_file}}"
+            done
+            ;;
+          "horizontal")
+            # Paste files side by side
+            paste -d',' "${files[@]}" > "{{output_file}}"
+            ;;
+          "key")
+            if [ -z "{{key_column}}" ] || [ "{{key_column}}" = "null" ]; then
+              echo "Error: key_column required for key merge"
+              exit 1
+            fi
+            # Use Python for join
+            python3 << EOF
+        import pandas as pd
+        import sys
+        files = [${files// /, }]
+        key = "{{key_column}}"
+        dfs = [pd.read_csv(f) for f in files]
+        merged = dfs[0]
+        for df in dfs[1:]:
+            merged = merged.merge(df, on=key, how='outer')
+        merged.to_csv("{{output_file}}", index=False)
+        print(f"Merged {len(files)} files on key '{key}'")
+        print(f"Output rows: {len(merged)}")
+        EOF
+            ;;
+        esac
+        echo "Merged file saved to: {{output_file}}"
+  - name: merge_json
+    description:
+      en: Merge multiple JSON files
+      zh: 合并多个JSON文件
+    parameters:
+      files:
+        type: array
+        items:
+          type: string
+        description:
+          en: List of JSON file paths
+          zh: JSON文件路径列表
+        required: true
+      merge_strategy:
+        type: string
+        enum: [array_concat, deep_merge, shallow_merge]
+        description:
+          en: How to merge JSON objects
+          zh: 如何合并JSON对象
+        default: array_concat
+      output_file:
+        type: string
+        description:
+          en: Output file path
+          zh: 输出文件路径
+        default: "merged.json"
+    implementation:
+      type: shell
+      command: |
+        if ! command -v jq &> /dev/null; then
+          echo "Error: jq required"
+          exit 1
+        fi
+        files=({{files}})
+        case "{{merge_strategy}}" in
+          "array_concat")
+            jq -s 'add' "${files[@]}" > "{{output_file}}"
+            ;;
+          "deep_merge")
+            jq -s 'reduce .[] as $item ({}; . * $item)' "${files[@]}" > "{{output_file}}"
+            ;;
+          "shallow_merge")
+            jq -s 'reduce .[] as $item ({}; . + $item)' "${files[@]}" > "{{output_file}}"
+            ;;
+        esac
+        echo "Merged JSON saved to: {{output_file}}"

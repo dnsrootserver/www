@@ -1,0 +1,32 @@
+name: dns-lookup
+version: "1.1.0"
+description: "Perform DNS lookups for domains using dig"
+description_zh: "使用 dig 进行 DNS 查询"
+author: agentforge
+category: network
+triggers: ["dns lookup", "dns query", "resolve domain", "dig"]
+triggers_zh: ["DNS 查询", "域名解析", "查找域名"]
+tags: [network, dns]
+steps:
+  - tool: regex_extract
+    params: {text: "{{ input }}", pattern: "\\b(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}\\b", var: domain}
+  - tool: shell
+    params:
+      command: "dig {{ domain[0] }} +short"
+      timeout: 10
+    output: dns_result
+  - tool: shell
+    params:
+      command: "dig {{ domain[0] }} ANY +noall +answer"
+      timeout: 10
+    output: dns_all
+  - tool: output
+    params:
+      message: |
+        Domain: {{ domain[0] }}
+        A Records (short):
+        {{ dns_result.stdout }}
+        Detailed Records:
+        {{ dns_all.stdout }}
+      format: panel
+      title: "DNS Lookup Results"

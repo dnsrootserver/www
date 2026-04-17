@@ -1,0 +1,97 @@
+version: 1.1.0
+premium: true
+name: Data Cleaning
+description:
+  en: Clean data by removing duplicates, handling nulls, trimming whitespace, and standardizing formats.
+  zh: 通过删除重复项、处理空值、修剪空白和标准化格式来清理数据。
+tools:
+  - name: clean_csv
+    description:
+      en: Clean CSV file with various operations
+      zh: 使用各种操作清理CSV文件
+    parameters:
+      file_path:
+        type: string
+        description:
+          en: Path to CSV file
+          zh: CSV文件路径
+        required: true
+      operations:
+        type: array
+        items:
+          type: string
+          enum: [deduplicate, trim, remove_nulls, normalize_case, fix_encoding]
+        description:
+          en: Cleaning operations to perform
+          zh: 要执行的清理操作
+        default: [trim, remove_nulls]
+      output_file:
+        type: string
+        description:
+          en: Output file path (default: overwrite original)
+          zh: 输出文件路径（默认：覆盖原文件）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        input="{{file_path}}"
+        output="{{output_file}}"
+        if [ -z "$output" ] || [ "$output" = "null" ]; then
+          output="$input"
+        fi
+        temp_file=$(mktemp)
+        cp "$input" "$temp_file"
+        # Apply operations
+        if echo "{{operations}}" | grep -q "deduplicate"; then
+          awk '!seen[$0]++' "$temp_file" > "$temp_file.tmp" && mv "$temp_file.tmp" "$temp_file"
+        fi
+        if echo "{{operations}}" | grep -q "trim"; then
+          sed -i 's/^[[:space:]]*//;s/[[:space:]]*$//' "$temp_file"
+        fi
+        if echo "{{operations}}" | grep -q "remove_nulls"; then
+          # Replace NA, null, NULL, None with empty string
+          sed -i 's/\b\(NA\|null\|NULL\|None\)\b//g' "$temp_file"
+        fi
+        if echo "{{operations}}" | grep -q "normalize_case"; then
+          # Convert text to lowercase (except header)
+          tail -n +2 "$temp_file" | tr '[:upper:]' '[:lower:]' | cat <(head -1 "$temp_file") - > "$temp_file.tmp" && mv "$temp_file.tmp" "$temp_file"
+        fi
+        if echo "{{operations}}" | grep -q "fix_encoding"; then
+          # Remove non-UTF8 characters
+          iconv -c -f utf-8 -t utf-8 "$temp_file" > "$temp_file.tmp" && mv "$temp_file.tmp" "$temp_file"
+        fi
+        mv "$temp_file" "$output"
+        echo "Cleaned file saved to: $output"
+  - name: detect_issues
+    description:
+      en: Detect data quality issues in CSV
+      zh: 检测CSV中的数据质量问题
+    parameters:
+      file_path:
+        type: string
+        description:
+          en: Path to CSV file
+          zh: CSV文件路径
+        required: true
+    implementation:
+      type: shell
+      command: |
+        if [ ! -f "{{file_path}}" ]; then
+          echo "Error: File not found"
+          exit 1
+        fi
+        echo "=== Data Quality Report ==="
+        echo "File: {{file_path}}"
+        echo ""
+        total_rows=$(($(wc -l < "{{file_path}}") - 1))
+        echo "Total rows: $total_rows"
+        echo ""
+        echo "--- Null/Empty Values ---"
+        awk -F, 'NR>1 {for(i=1;i<=NF;i++) if($i=="" || $i ~ /^[[:space:]]*$/) null[i]++} END {for(i in null) print "Column " i ": " null[i] " empty (" sprintf("%.1f", null[i]/NR*100) "%)"}' "{{file_path}}" | sort -t: -k2 -rn
+        echo ""
+        echo "--- Duplicate Rows ---"
+        duplicates=$(awk 'seen[$0]++' "{{file_path}}" | wc -l)
+        echo "Duplicate rows: $duplicates"
+        echo ""
+        echo "--- Column Types ---"
+        head -2 "{{file_path}}" | awk -F, 'NR==1 {for(i=1;i<=NF;i++) print "Column " i ": " $i}'

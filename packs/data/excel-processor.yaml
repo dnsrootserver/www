@@ -1,0 +1,87 @@
+version: 1.1.0
+premium: true
+name: Excel Processor
+description:
+  en: Process Excel files (.xlsx, .xls) for reading, writing, and data extraction.
+  zh: 处理Excel文件（.xlsx、.xls）以进行读取、写入和数据提取。
+tools:
+  - name: read_excel
+    description:
+      en: Read an Excel file and output as CSV or JSON
+      zh: 读取Excel文件并输出为CSV或JSON
+    parameters:
+      file_path:
+        type: string
+        description:
+          en: Path to the Excel file
+          zh: Excel文件路径
+        required: true
+      sheet_name:
+        type: string
+        description:
+          en: Sheet name to read (default: first sheet)
+          zh: 要读取的工作表名称（默认：第一个工作表）
+        default: null
+      output_format:
+        type: string
+        enum: [csv, json]
+        description:
+          en: Output format
+          zh: 输出格式
+        default: csv
+    implementation:
+      type: shell
+      command: |
+        if [ ! -f "{{file_path}}" ]; then
+          echo "Error: File not found: {{file_path}}"
+          exit 1
+        fi
+        # Check if python3 with openpyxl is available
+        if python3 -c "import openpyxl" 2>/dev/null; then
+          python3 << EOF
+        import openpyxl
+        import json
+        import csv
+        import sys
+        wb = openpyxl.load_workbook("{{file_path}}", read_only=True)
+        sheet = wb["{{sheet_name}}"] if "{{sheet_name}}" and "{{sheet_name}}" != "null" else wb.active
+        rows = list(sheet.iter_rows(values_only=True))
+        if "{{output_format}}" == "json":
+            headers = rows[0] if rows else []
+            data = [dict(zip(headers, row)) for row in rows[1:]]
+            print(json.dumps(data, indent=2))
+        else:
+            writer = csv.writer(sys.stdout)
+            writer.writerows(rows)
+        wb.close()
+        EOF
+        else
+          echo "Error: Python3 with openpyxl required. Install with: pip install openpyxl"
+          exit 1
+        fi
+  - name: list_sheets
+    description:
+      en: List all sheet names in an Excel file
+      zh: 列出Excel文件中的所有工作表名称
+    parameters:
+      file_path:
+        type: string
+        description:
+          en: Path to the Excel file
+          zh: Excel文件路径
+        required: true
+    implementation:
+      type: shell
+      command: |
+        if python3 -c "import openpyxl" 2>/dev/null; then
+          python3 -c "
+        import openpyxl
+        wb = openpyxl.load_workbook('{{file_path}}', read_only=True)
+        for name in wb.sheetnames:
+            print(name)
+        wb.close()
+        "
+        else
+          echo "Error: Python3 with openpyxl required"
+          exit 1
+        fi

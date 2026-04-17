@@ -1,0 +1,127 @@
+version: 1.1.0
+premium: true
+name: Data Visualizer
+description:
+  en: Generate charts and graphs from data in terminal (ASCII) or as HTML/SVG files.
+  zh: 从数据生成终端（ASCII）图表或HTML/SVG文件。
+tools:
+  - name: ascii_chart
+    description:
+      en: Generate ASCII charts (bar, line, sparkline)
+      zh: 生成ASCII图表（条形图、折线图、火花图）
+    parameters:
+      data:
+        type: array
+        items:
+          type: number
+        description:
+          en: Array of numeric values
+          zh: 数值数组
+        required: true
+      chart_type:
+        type: string
+        enum: [bar, line, sparkline]
+        description:
+          en: Type of chart
+          zh: 图表类型
+        default: bar
+      width:
+        type: integer
+        description:
+          en: Chart width in characters
+          zh: 图表宽度（字符数）
+        default: 40
+      height:
+        type: integer
+        description:
+          en: Chart height in rows
+          zh: 图表高度（行数）
+        default: 10
+    implementation:
+      type: shell
+      command: |
+        # Convert data array to space-separated values
+        data="{{data}}"
+        # Use Python for chart generation (more reliable)
+        python3 << EOF
+        import sys
+        data = [${data}]
+        chart_type = "{{chart_type}}"
+        width = {{width}}
+        height = {{height}}
+        if not data:
+            print("No data provided")
+            sys.exit(1)
+        if chart_type == "sparkline":
+            # Sparkline characters
+            ticks = ' ▁▂▃▄▅▆▇█'
+            mn, mx = min(data), max(data)
+            rng = mx - mn if mx != mn else 1
+            print(''.join(ticks[int((x - mn) / rng * 8)] for x in data))
+        elif chart_type == "bar":
+            # Horizontal bar chart
+            mx = max(data)
+            for i, val in enumerate(data):
+                bar_len = int(val / mx * width) if mx > 0 else 0
+                print(f"{i:3d} | {'█' * bar_len} {val}")
+        elif chart_type == "line":
+            # ASCII line chart
+            mx, mn = max(data), min(data)
+            rng = mx - mn if mx != mn else 1
+            for row in range(height, 0, -1):
+                threshold = mn + (rng * row / height)
+                line = ""
+                for val in data:
+                    line += "█" if val >= threshold else " "
+                print(f"{threshold:6.1f} |{line}")
+            print("       +" + "-" * len(data))
+        EOF
+  - name: generate_html_chart
+    description:
+      en: Generate HTML file with Chart.js visualization
+      zh: 生成带有Chart.js可视化的HTML文件
+    parameters:
+      data:
+        type: object
+        description:
+          en: Data object with labels and datasets
+          zh: 包含标签和数据集的对象
+        required: true
+      chart_type:
+        type: string
+        enum: [line, bar, pie, doughnut]
+        description:
+          en: Chart type
+          zh: 图表类型
+        default: line
+      output_file:
+        type: string
+        description:
+          en: Output HTML file path
+          zh: 输出HTML文件路径
+        default: "chart.html"
+    implementation:
+      type: shell
+      command: |
+        cat > "{{output_file}}" << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Chart</title>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        </head>
+        <body>
+            <canvas id="myChart" width="800" height="400"></canvas>
+            <script>
+                const ctx = document.getElementById('myChart').getContext('2d');
+                const data = {{data}};
+                new Chart(ctx, {
+                    type: '{{chart_type}}',
+                    data: data,
+                    options: { responsive: true }
+                });
+            </script>
+        </body>
+        </html>
+        EOF
+        echo "Chart generated: {{output_file}}"

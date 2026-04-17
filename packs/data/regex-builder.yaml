@@ -1,0 +1,169 @@
+version: 1.1.0
+premium: true
+name: Regex Builder
+description:
+  en: Build, test, and debug regular expressions with sample data. Extract matches and replace patterns.
+  zh: 构建、测试和调试正则表达式。提取匹配项并替换模式。
+tools:
+  - name: test_regex
+    description:
+      en: Test regex pattern against sample text
+      zh: 测试正则表达式模式与样本文本
+    parameters:
+      pattern:
+        type: string
+        description:
+          en: Regular expression pattern
+          zh: 正则表达式模式
+        required: true
+      text:
+        type: string
+        description:
+          en: Sample text to test against
+          zh: 要测试的样本文本
+        required: true
+      flags:
+        type: string
+        description:
+          en: Regex flags (i=case-insensitive, m=multiline, s=dotall)
+          zh: 正则表达式标志（i=不区分大小写，m=多行，s=点匹配所有）
+        default: ""
+    implementation:
+      type: shell
+      command: |
+        python3 << EOF
+        import re
+        pattern = r"""{{pattern}}"""
+        text = """{{text}}"""
+        flags = 0
+        if 'i' in "{{flags}}":
+            flags |= re.IGNORECASE
+        if 'm' in "{{flags}}":
+            flags |= re.MULTILINE
+        if 's' in "{{flags}}":
+            flags |= re.DOTALL
+        try:
+            regex = re.compile(pattern, flags)
+            matches = list(regex.finditer(text))
+            print(f"Pattern: {pattern}")
+            print(f"Flags: {{flags}}")
+            print(f"Matches found: {len(matches)}")
+            print("---")
+            for i, match in enumerate(matches):
+                print(f"Match {i+1}: '{match.group()}' at position {match.start()}-{match.end()}")
+                if match.groups():
+                    print(f"  Groups: {match.groups()}")
+                if match.groupdict():
+                    print(f"  Named groups: {match.groupdict()}")
+        except re.error as e:
+            print(f"Invalid regex: {e}")
+        EOF
+  - name: extract_matches
+    description:
+      en: Extract all matches from file or text
+      zh: 从文件或文本中提取所有匹配项
+    parameters:
+      pattern:
+        type: string
+        description:
+          en: Regular expression pattern
+          zh: 正则表达式模式
+        required: true
+      source:
+        type: string
+        description:
+          en: Text or file path (prefix with @ for file)
+          zh: 文本或文件路径（用@前缀表示文件）
+        required: true
+      group:
+        type: integer
+        description:
+          en: Which capture group to extract (0 for full match)
+          zh: 要提取的捕获组（0表示完整匹配）
+        default: 0
+      unique:
+        type: boolean
+        description:
+          en: Return only unique matches
+          zh: 仅返回唯一匹配
+        default: false
+    implementation:
+      type: shell
+      command: |
+        if [[ "{{source}}" == @* ]]; then
+          text=$(cat "{{source:1}}")
+        else
+          text="{{source}}"
+        fi
+        python3 << EOF
+        import re
+        pattern = r"""{{pattern}}"""
+        text = """$text"""
+        group = {{group}}
+        try:
+            matches = re.findall(pattern, text)
+            if group > 0 and matches and isinstance(matches[0], tuple):
+                matches = [m[group-1] for m in matches]
+            if {{unique}}:
+                matches = list(set(matches))
+            for match in matches:
+                print(match)
+        except re.error as e:
+            print(f"Invalid regex: {e}")
+        EOF
+  - name: replace_pattern
+    description:
+      en: Find and replace using regex
+      zh: 使用正则表达式查找和替换
+    parameters:
+      pattern:
+        type: string
+        description:
+          en: Regex pattern to find
+          zh: 要查找的正则表达式模式
+        required: true
+      replacement:
+        type: string
+        description:
+          en: Replacement string (can use \1, \2 for groups)
+          zh: 替换字符串（可使用 \1、\2 表示分组）
+        required: true
+      source:
+        type: string
+        description:
+          en: Text or file path (prefix with @)
+          zh: 文本或文件路径（用@前缀）
+        required: true
+      output_file:
+        type: string
+        description:
+          en: Output file (optional, prints to stdout if omitted)
+          zh: 输出文件（可选，省略则打印到标准输出）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        if [[ "{{source}}" == @* ]]; then
+          text=$(cat "{{source:1}}")
+        else
+          text="{{source}}"
+        fi
+        result=$(python3 -c "
+        import re
+        import sys
+        pattern = r'''{{pattern}}'''
+        replacement = r'''{{replacement}}'''
+        text = sys.stdin.read()
+        try:
+            result = re.sub(pattern, replacement, text)
+            print(result)
+        except re.error as e:
+            print(f'Error: {e}', file=sys.stderr)
+            sys.exit(1)
+        " <<< "$text")
+        if [ -n "{{output_file}}" ] && [ "{{output_file}}" != "null" ]; then
+          echo "$result" > "{{output_file}}"
+          echo "Output written to: {{output_file}}"
+        else
+          echo "$result"
+        fi

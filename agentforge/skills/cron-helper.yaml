@@ -1,0 +1,54 @@
+name: cron-helper
+version: "1.1.0"
+description: "Validate and explain cron expressions, compute next run times"
+description_zh: "验证和解释 cron 表达式，计算下次运行时间"
+author: agentforge
+category: devops
+triggers: ["cron", "cron expression", "cron helper", "cron validate", "cron schedule"]
+triggers_zh: ["cron 表达式", "cron 调度", "cron 帮助"]
+tags: [devops, utility]
+steps:
+  - tool: regex_extract
+    params: {text: "{{ input }}", pattern: "\\b(?:[0-9*,/-]+\\s+){4}[0-9*,/-]+\\b", var: cron_expr}
+  - tool: shell
+    params:
+      command: |
+        python3 -c "
+import sys, re
+expr = '{{ cron_expr[0] }}'
+fields = expr.split()
+if len(fields) != 5:
+    print('Error: Cron expression must have 5 fields')
+    sys.exit(1)
+names = ['minute', 'hour', 'day of month', 'month', 'day of week']
+for i, field in enumerate(fields):
+    if not re.fullmatch(r'[0-9*,/-]+', field):
+        print(f'Error: Invalid characters in {names[i]} field')
+        sys.exit(1)
+print('Valid cron expression.')
+print('Fields:')
+for i, field in enumerate(fields):
+    print(f'  {names[i]}: {field}')
+try:
+    from croniter import croniter
+    from datetime import datetime
+    now = datetime.now()
+    cron = croniter(expr, now)
+    next_runs = [cron.get_next(datetime).strftime('%Y-%m-%d %H:%M:%S') for _ in range(5)]
+    print('Next 5 runs:')
+    for nr in next_runs:
+        print(f'  {nr}')
+except ImportError:
+    print('Install croniter for next run times: pip install croniter')
+except Exception as e:
+    print(f'Error computing next runs: {e}')
+"
+      timeout: 10
+    output: cron_result
+  - tool: output
+    params:
+      message: |
+        Cron Expression: {{ cron_expr[0] }}
+        {{ cron_result.stdout }}
+      format: panel
+      title: "Cron Expression Helper"

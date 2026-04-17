@@ -1,0 +1,25 @@
+name: whois-lookup
+version: "1.1.0"
+description: "Perform WHOIS lookup for domains"
+description_zh: "执行域名 WHOIS 查询"
+author: agentforge
+category: network
+triggers: ["whois", "whois lookup", "domain whois", "domain info"]
+triggers_zh: ["WHOIS 查询", "域名信息", "域名查询"]
+tags: [network, domain]
+steps:
+  - tool: regex_extract
+    params: {text: "{{ input }}", pattern: "\\b(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}\\b", var: domain}
+  - tool: shell
+    params:
+      command: "whois {{ domain[0] }}"
+      timeout: 15
+    output: whois_output
+  - tool: output
+    params:
+      message: |
+        Domain: {{ domain[0] }}
+        WHOIS Information:
+        {{ whois_output.stdout }}
+      format: panel
+      title: "WHOIS Lookup Results"

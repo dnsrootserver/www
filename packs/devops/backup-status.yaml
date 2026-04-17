@@ -1,0 +1,267 @@
+version: 1.1.0
+premium: true
+name: Backup Status
+description:
+  en: Verify backup integrity, check backup schedules, and monitor backup storage usage.
+  zh: 验证备份完整性，检查备份计划，并监控备份存储使用情况。
+triggers:
+  en:
+    - "backup status"
+    - "check backup"
+    - "backup verification"
+    - "backup monitor"
+    - "verify backup"
+  zh:
+    - "备份状态"
+    - "检查备份"
+    - "备份验证"
+    - "备份监控"
+    - "验证备份"
+tools:
+  - name: check_backup_files
+    description:
+      en: Check backup files for existence, age, and size
+      zh: 检查备份文件的存在、时间和大小
+    parameters:
+      backup_dir:
+        type: string
+        description:
+          en: Backup directory path
+          zh: 备份目录路径
+        required: true
+      pattern:
+        type: string
+        description:
+          en: File pattern to match (e.g., *.sql.gz, *.tar.gz)
+          zh: 要匹配的文件模式（例如*.sql.gz、*.tar.gz）
+        default: "*.gz"
+      max_age_days:
+        type: integer
+        description:
+          en: Maximum age in days for recent backup
+          zh: 最近备份的最大天数
+        default: 1
+    implementation:
+      type: shell
+      command: |
+        echo "=== Backup File Check: {{backup_dir}} ==="
+        echo ""
+        
+        if [ ! -d "{{backup_dir}}" ]; then
+          echo "❌ Backup directory does not exist: {{backup_dir}}"
+          exit 1
+        fi
+        
+        echo "=== Backup Files ({{pattern}}) ==="
+        BACKUP_FILES=$(find "{{backup_dir}}" -name "{{pattern}}" -type f 2>/dev/null)
+        
+        if [ -z "$BACKUP_FILES" ]; then
+          echo "❌ No backup files found matching {{pattern}}"
+          exit 1
+        fi
+        
+        echo "$BACKUP_FILES" | while read -r file; do
+          SIZE=$(du -h "$file" | cut -f1)
+          DATE=$(stat -c %y "$file" 2>/dev/null || stat -f %Sm "$file")
+          echo "  📁 $(basename "$file")"
+          echo "     Size: $SIZE"
+          echo "     Date: $DATE"
+        done
+        
+        echo ""
+        
+        # Check for recent backup
+        LATEST_BACKUP=$(find "{{backup_dir}}" -name "{{pattern}}" -type f -mtime -{{max_age_days}} 2>/dev/null | head -1)
+        
+        if [ -n "$LATEST_BACKUP" ]; then
+          echo "✅ Recent backup found (within {{max_age_days}} day(s))"
+          echo "   $(basename "$LATEST_BACKUP")"
+        else
+          echo "⚠️  No recent backup found (within {{max_age_days}} day(s))"
+        fi
+        
+        echo ""
+        echo "=== Storage Usage ==="
+        du -sh "{{backup_dir}}" 2>/dev/null || echo "Cannot calculate directory size"
+  - name: verify_backup
+    description:
+      en: Verify backup file integrity (checksum, compression, database)
+      zh: 验证备份文件完整性（校验和、压缩、数据库）
+    parameters:
+      backup_file:
+        type: string
+        description:
+          en: Path to backup file
+          zh: 备份文件路径
+        required: true
+      backup_type:
+        type: string
+        enum: [auto, gzip, tar, mysql, postgres, mongo]
+        description:
+          en: Backup type (auto-detect if not specified)
+          zh: 备份类型（未指定则自动检测）
+        default: auto
+    implementation:
+      type: shell
+      command: |
+        echo "=== Backup Verification: {{backup_file}} ==="
+        echo ""
+        
+        if [ ! -f "{{backup_file}}" ]; then
+          echo "❌ Backup file not found: {{backup_file}}"
+          exit 1
+        fi
+        
+        FILE_SIZE=$(du -h "{{backup_file}}" | cut -f1)
+        echo "File size: $FILE_SIZE"
+        echo ""
+        
+        # Auto-detect backup type if not specified
+        DETECTED_TYPE="{{backup_type}}"
+        if [ "$DETECTED_TYPE" = "auto" ]; then
+          case "{{backup_file}}" in
+            *.sql.gz|*.sql.bz2) DETECTED_TYPE="mysql" ;;
+            *.dump|*.dump.gz) DETECTED_TYPE="postgres" ;;
+            *.bson|*.bson.gz) DETECTED_TYPE="mongo" ;;
+            *.tar.gz|*.tgz) DETECTED_TYPE="tar" ;;
+            *.gz) DETECTED_TYPE="gzip" ;;
+            *) DETECTED_TYPE="unknown" ;;
+          esac
+        fi
+        
+        echo "Detected type: $DETECTED_TYPE"
+        echo ""
+        
+        case "$DETECTED_TYPE" in
+          "gzip")
+            echo "=== Gzip Integrity Check ==="
+            if gzip -t "{{backup_file}}" 2>/dev/null; then
+              echo "✅ Gzip file is valid"
+            else
+              echo "❌ Gzip file is corrupted"
+            fi
+            ;;
+          "tar")
+            echo "=== Tar Integrity Check ==="
+            if tar -tzf "{{backup_file}}" >/dev/null 2>&1; then
+              echo "✅ Tar archive is valid"
+              echo ""
+              echo "=== Archive Contents (first 10) ==="
+              tar -tzf "{{backup_file}}" 2>/dev/null | head -10
+            else
+              echo "❌ Tar archive is corrupted"
+            fi
+            ;;
+          "mysql")
+            echo "=== MySQL Backup Check ==="
+            if file "{{backup_file}}" | grep -q "gzip"; then
+              if gzip -t "{{backup_file}}" 2>/dev/null; then
+                echo "✅ Compression is valid"
+              else
+                echo "❌ Compression is corrupted"
+              fi
+            fi
+            echo ""
+            echo "=== SQL Preview ==="
+            zcat "{{backup_file}}" 2>/dev/null | head -20 || gunzip -c "{{backup_file}}" 2>/dev/null | head -20
+            ;;
+          "postgres")
+            echo "=== PostgreSQL Backup Check ==="
+            if file "{{backup_file}}" | grep -q "gzip"; then
+              if gzip -t "{{backup_file}}" 2>/dev/null; then
+                echo "✅ Compression is valid"
+              else
+                echo "❌ Compression is corrupted"
+              fi
+            fi
+            echo ""
+            echo "=== Dump Preview ==="
+            zcat "{{backup_file}}" 2>/dev/null | head -20 || gunzip -c "{{backup_file}}" 2>/dev/null | head -20
+            ;;
+          *)
+            echo "=== Generic File Check ==="
+            echo "File type: $(file "{{backup_file}}")"
+            ;;
+        esac
+        
+        echo ""
+        echo "=== Checksum ==="
+        sha256sum "{{backup_file}}" 2>/dev/null || shasum -a 256 "{{backup_file}}" 2>/dev/null
+  - name: backup_schedule
+    description:
+      en: Check backup schedules (cron jobs, systemd timers)
+      zh: 检查备份计划（cron任务、systemd定时器）
+    parameters:
+      show_all:
+        type: boolean
+        description:
+          en: Show all cron jobs, not just backup-related
+          zh: 显示所有cron任务，不仅仅是备份相关的
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Backup Schedule Check ==="
+        echo ""
+        
+        echo "=== Cron Jobs ==="
+        if [ "{{show_all}}" = "true" ]; then
+          crontab -l 2>/dev/null || echo "No user crontab"
+          echo ""
+          echo "=== System Cron ==="
+          ls -la /etc/cron* 2>/dev/null | head -20
+        else
+          echo "=== Backup-related Cron Jobs ==="
+          crontab -l 2>/dev/null | grep -i "backup\|dump\|rsync\|sync" || echo "No backup cron jobs found"
+          echo ""
+          echo "=== System Backup Jobs ==="
+          grep -r "backup\|dump" /etc/cron* 2>/dev/null | head -10 || echo "No system backup jobs found"
+        fi
+        
+        echo ""
+        echo "=== Systemd Timers ==="
+        systemctl list-timers 2>/dev/null | grep -i "backup\|snapshot" || echo "No backup timers found"
+  - name: disk_space
+    description:
+      en: Check disk space for backup destinations
+      zh: 检查备份目标的磁盘空间
+    parameters:
+      paths:
+        type: string
+        description:
+          en: Comma-separated list of paths to check
+          zh: 要检查的路径（逗号分隔）
+        default: "/,/tmp,/var"
+      threshold:
+        type: integer
+        description:
+          en: Alert threshold percentage
+          zh: 警报阈值百分比
+        default: 90
+    implementation:
+      type: shell
+      command: |
+        echo "=== Disk Space Check ==="
+        echo ""
+        
+        IFS=',' read -ra PATHS <<< "{{paths}}"
+        
+        for path in "${PATHS[@]}"; do
+          path=$(echo "$path" | xargs)
+          echo "=== $path ==="
+          
+          USAGE=$(df -h "$path" 2>/dev/null | tail -1 | awk '{print $5}' | sed 's/%//')
+          
+          if [ -n "$USAGE" ]; then
+            if [ "$USAGE" -ge {{threshold}} ]; then
+              echo "⚠️  Usage: $USAGE% (threshold: {{threshold}}%)"
+            else
+              echo "✅ Usage: $USAGE%"
+            fi
+            
+            df -h "$path" 2>/dev/null | tail -1 | awk '{print "   Total: " $2 ", Used: " $3 ", Available: " $4}'
+          else
+            echo "❌ Cannot check disk space for $path"
+          fi
+          echo ""
+        done

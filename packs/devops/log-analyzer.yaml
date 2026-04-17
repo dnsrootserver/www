@@ -1,0 +1,237 @@
+version: 1.1.0
+premium: true
+name: Log Analyzer
+description:
+  en: Analyze log files for patterns, errors, statistics, and anomalies with powerful filtering.
+  zh: 分析日志文件的模式、错误、统计信息和异常，提供强大的过滤功能。
+triggers:
+  en:
+    - "log analyzer"
+    - "analyze logs"
+    - "log analysis"
+    - "check logs"
+    - "log patterns"
+  zh:
+    - "日志分析"
+    - "分析日志"
+    - "日志分析"
+    - "检查日志"
+    - "日志模式"
+tools:
+  - name: analyze_log_file
+    description:
+      en: Analyze a log file for errors, warnings, and patterns
+      zh: 分析日志文件的错误、警告和模式
+    parameters:
+      file_path:
+        type: string
+        description:
+          en: Path to the log file
+          zh: 日志文件路径
+        required: true
+      lines:
+        type: integer
+        description:
+          en: Number of lines to analyze from the end
+          zh: 从末尾分析的行数
+        default: 1000
+      pattern:
+        type: string
+        description:
+          en: Custom pattern to search for (regex)
+          zh: 要搜索的自定义模式（正则表达式）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        if [ ! -f "{{file_path}}" ]; then
+          echo "Error: File not found: {{file_path}}"
+          exit 1
+        fi
+        
+        echo "=== Log File Analysis: {{file_path}} ==="
+        echo "File size: $(du -h "{{file_path}}" | cut -f1)"
+        echo "Total lines: $(wc -l < "{{file_path}}")"
+        echo "Last modified: $(stat -c %y "{{file_path}}" 2>/dev/null || stat -f %Sm "{{file_path}}")"
+        echo ""
+        
+        echo "=== Error/Warning Summary ==="
+        tail -{{lines}} "{{file_path}}" | grep -i -c "error\|exception\|fail\|critical" || echo "0 errors"
+        tail -{{lines}} "{{file_path}}" | grep -i -c "warn\|warning" || echo "0 warnings"
+        echo ""
+        
+        echo "=== Recent Errors (last 10) ==="
+        tail -{{lines}} "{{file_path}}" | grep -i "error\|exception\|fail\|critical" | tail -10 || echo "No errors found"
+        echo ""
+        
+        if [ -n "{{pattern}}" ] && [ "{{pattern}}" != "null" ]; then
+          echo "=== Pattern Matches: '{{pattern}}' ==="
+          tail -{{lines}} "{{file_path}}" | grep -i "{{pattern}}" | tail -20 || echo "No matches found"
+        fi
+  - name: apache_logs
+    description:
+      en: Analyze Apache/Nginx access logs for traffic patterns and errors
+      zh: 分析Apache/Nginx访问日志的流量模式和错误
+    parameters:
+      log_type:
+        type: string
+        enum: [access, error, combined]
+        description:
+          en: Type of log file
+          zh: 日志文件类型
+        default: combined
+      lines:
+        type: integer
+        description:
+          en: Number of lines to analyze
+          zh: 分析的行数
+        default: 1000
+    implementation:
+      type: shell
+      command: |
+        LOG_PATH=""
+        if [ "{{log_type}}" = "error" ]; then
+          LOG_PATH="/var/log/nginx/error.log"
+          [ ! -f "$LOG_PATH" ] && LOG_PATH="/var/log/apache2/error.log"
+        else
+          LOG_PATH="/var/log/nginx/access.log"
+          [ ! -f "$LOG_PATH" ] && LOG_PATH="/var/log/apache2/access.log"
+        fi
+        
+        if [ ! -f "$LOG_PATH" ]; then
+          echo "Log file not found: $LOG_PATH"
+          exit 1
+        fi
+        
+        echo "=== {{log_type}} Log Analysis: $LOG_PATH ==="
+        echo ""
+        
+        if [ "{{log_type}}" = "error" ]; then
+          echo "=== Recent Errors ==="
+          tail -{{lines}} "$LOG_PATH" | tail -20
+        else
+          echo "=== Top 10 IP Addresses ==="
+          tail -{{lines}} "$LOG_PATH" | awk '{print $1}' | sort | uniq -c | sort -rn | head -10
+          echo ""
+          echo "=== Top 10 Requested URLs ==="
+          tail -{{lines}} "$LOG_PATH" | awk '{print $7}' | sort | uniq -c | sort -rn | head -10
+          echo ""
+          echo "=== HTTP Status Codes ==="
+          tail -{{lines}} "$LOG_PATH" | awk '{print $9}' | sort | uniq -c | sort -rn
+          echo ""
+          echo "=== Recent 404 Errors ==="
+          tail -{{lines}} "$LOG_PATH" | awk '$9 == 404' | tail -10
+        fi
+  - name: syslog_analysis
+    description:
+      en: Analyze system logs for kernel messages, services, and security events
+      zh: 分析系统日志的内核消息、服务和安全事件
+    parameters:
+      service:
+        type: string
+        description:
+          en: Filter by service name (e.g., sshd, cron, kernel)
+          zh: 按服务名称过滤（例如sshd、cron、kernel）
+        default: null
+      lines:
+        type: integer
+        description:
+          en: Number of lines to analyze
+          zh: 分析的行数
+        default: 500
+    implementation:
+      type: shell
+      command: |
+        SYSLOG=""
+        if [ -f /var/log/syslog ]; then
+          SYSLOG="/var/log/syslog"
+        elif [ -f /var/log/messages ]; then
+          SYSLOG="/var/log/messages"
+        else
+          echo "No system log file found"
+          exit 1
+        fi
+        
+        echo "=== System Log Analysis ==="
+        echo ""
+        
+        if [ -n "{{service}}" ] && [ "{{service}}" != "null" ]; then
+          echo "=== {{service}} Service Logs ==="
+          tail -{{lines}} "$SYSLOG" | grep -i "{{service}}" | tail -30
+        else
+          echo "=== Service Summary ==="
+          tail -{{lines}} "$SYSLOG" | awk '{print $5}' | cut -d: -f1 | sort | uniq -c | sort -rn | head -15
+          echo ""
+          echo "=== Recent Errors ==="
+          tail -{{lines}} "$SYSLOG" | grep -i "error\|fail\|critical" | tail -15
+          echo ""
+          echo "=== Authentication Events ==="
+          tail -{{lines}} "$SYSLOG" | grep -i "sshd\|login\|auth" | tail -10
+        fi
+  - name: docker_logs
+    description:
+      en: Analyze Docker container logs for errors and patterns
+      zh: 分析Docker容器日志的错误和模式
+    parameters:
+      container:
+        type: string
+        description:
+          en: Container name or ID
+          zh: 容器名称或ID
+        required: true
+      lines:
+        type: integer
+        description:
+          en: Number of lines to analyze
+          zh: 分析的行数
+        default: 500
+    implementation:
+      type: shell
+      command: |
+        echo "=== Docker Container Logs: {{container}} ==="
+        echo ""
+        
+        echo "=== Recent Logs ==="
+        docker logs --tail={{lines}} {{container}} 2>&1 | tail -30
+        echo ""
+        
+        echo "=== Error Summary ==="
+        docker logs --tail={{lines}} {{container}} 2>&1 | grep -i -c "error\|exception\|fail" || echo "0 errors"
+        echo ""
+        
+        echo "=== Recent Errors ==="
+        docker logs --tail={{lines}} {{container}} 2>&1 | grep -i "error\|exception\|fail" | tail -10 || echo "No errors found"
+  - name: log_rotation
+    description:
+      en: Check log rotation status and manage log files
+      zh: 检查日志轮转状态并管理日志文件
+    parameters:
+      action:
+        type: string
+        enum: [status, cleanup, compress]
+        description:
+          en: Action to perform
+          zh: 要执行的操作
+        default: status
+    implementation:
+      type: shell
+      command: |
+        case "{{action}}" in
+          "status")
+            echo "=== Log Rotation Status ==="
+            echo "Logrotate configuration:"
+            cat /etc/logrotate.conf 2>/dev/null | head -20 || echo "logrotate not configured"
+            echo ""
+            echo "=== Large Log Files ==="
+            find /var/log -type f -name "*.log" -size +100M 2>/dev/null | head -10
+            ;;
+          "cleanup")
+            echo "=== Cleaning up old logs ==="
+            find /var/log -type f -name "*.log.*" -mtime +30 -delete 2>/dev/null && echo "Cleaned logs older than 30 days"
+            find /var/log -type f -name "*.gz" -mtime +7 -delete 2>/dev/null && echo "Cleaned compressed logs older than 7 days"
+            ;;
+          "compress")
+            echo "=== Compressing old logs ==="
+            find /var/log -type f -name "*.log" -mtime +7 -exec gzip {} \; 2>/dev/null && echo "Compressed logs older than 7 days"
+            ;;
+        esac

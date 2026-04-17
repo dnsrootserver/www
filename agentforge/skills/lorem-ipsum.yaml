@@ -1,0 +1,52 @@
+name: lorem-ipsum
+version: "1.1.0"
+description: "Generate Lorem Ipsum placeholder text"
+description_zh: "生成 Lorem Ipsum 占位文本"
+author: agentforge
+category: content
+triggers: ["lorem ipsum", "generate placeholder text", "dummy text", "fake text"]
+triggers_zh: ["占位文本", "假文本", "填充文本", "Lorem Ipsum"]
+tags: [text, generator, placeholder]
+steps:
+  - tool: python
+    params:
+      code: |
+        import random
+        lorem_words = [
+            "lorem", "ipsum", "dolor", "sit", "amet", "consectetur",
+            "adipiscing", "elit", "sed", "do", "eiusmod", "tempor",
+            "incididunt", "ut", "labore", "et", "dolore", "magna", "aliqua"
+        ]
+        
+        # Parse input for count
+        text = "{{ input }}".strip()
+        count = 1
+        if text:
+            try:
+                count = int(text.split()[0])
+            except:
+                count = 1
+        
+        if count < 1:
+            count = 1
+        elif count > 10:
+            count = 10
+        
+        paragraphs = []
+        for _ in range(count):
+            sentences = []
+            for _ in range(random.randint(3, 6)):
+                words = random.sample(lorem_words, random.randint(8, 15))
+                words[0] = words[0].capitalize()
+                sentence = ' '.join(words) + '.'
+                sentences.append(sentence)
+            paragraphs.append(' '.join(sentences))
+        
+        result = '\n\n'.join(paragraphs)
+        print(result)
+      var: result
+  - tool: output
+    params:
+      message: "{{ result }}"
+      format: panel
+      title: "Lorem Ipsum Generator"

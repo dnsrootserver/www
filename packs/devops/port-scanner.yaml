@@ -1,0 +1,259 @@
+version: 1.1.0
+premium: true
+name: Port Scanner
+description:
+  en: Discover open ports, services, and running processes on local and remote hosts.
+  zh: 发现本地和远程主机上的开放端口、服务和运行进程。
+triggers:
+  en:
+    - "port scanner"
+    - "port scan"
+    - "open ports"
+    - "service discovery"
+    - "check ports"
+  zh:
+    - "端口扫描器"
+    - "端口扫描"
+    - "开放端口"
+    - "服务发现"
+    - "检查端口"
+tools:
+  - name: local_ports
+    description:
+      en: Scan local machine for open ports and listening services
+      zh: 扫描本地机器的开放端口和监听服务
+    parameters:
+      protocol:
+        type: string
+        enum: [tcp, udp, both]
+        description:
+          en: Protocol to scan
+          zh: 要扫描的协议
+        default: both
+      show_processes:
+        type: boolean
+        description:
+          en: Show process information for each port
+          zh: 显示每个端口的进程信息
+        default: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== Local Open Ports ==="
+        echo ""
+        
+        if [ "{{protocol}}" = "tcp" ] || [ "{{protocol}}" = "both" ]; then
+          echo "=== TCP Ports ==="
+          if [ "{{show_processes}}" = "true" ]; then
+            netstat -tlnp 2>/dev/null || ss -tlnp 2>/dev/null || lsof -iTCP -sTCP:LISTEN -n -P 2>/dev/null
+          else
+            netstat -tln 2>/dev/null || ss -tln 2>/dev/null || lsof -iTCP -sTCP:LISTEN -n -P 2>/dev/null | awk '{print $1, $9}'
+          fi
+          echo ""
+        fi
+        
+        if [ "{{protocol}}" = "udp" ] || [ "{{protocol}}" = "both" ]; then
+          echo "=== UDP Ports ==="
+          if [ "{{show_processes}}" = "true" ]; then
+            netstat -ulnp 2>/dev/null || ss -ulnp 2>/dev/null || lsof -iUDP -n -P 2>/dev/null
+          else
+            netstat -uln 2>/dev/null || ss -uln 2>/dev/null || lsof -iUDP -n -P 2>/dev/null | awk '{print $1, $9}'
+          fi
+        fi
+  - name: remote_scan
+    description:
+      en: Scan remote host for open ports
+      zh: 扫描远程主机的开放端口
+    parameters:
+      host:
+        type: string
+        description:
+          en: Hostname or IP address
+          zh: 主机名或IP地址
+        required: true
+      ports:
+        type: string
+        description:
+          en: Ports to scan (comma-separated, range, or 'common')
+          zh: 要扫描的端口（逗号分隔、范围或'common'）
+        default: "common"
+      timeout:
+        type: integer
+        description:
+          en: Connection timeout in seconds
+          zh: 连接超时秒数
+        default: 2
+    implementation:
+      type: shell
+      command: |
+        echo "=== Remote Port Scan: {{host}} ==="
+        echo ""
+        
+        # Determine ports to scan
+        if [ "{{ports}}" = "common" ]; then
+          PORTS="21,22,23,25,53,80,110,143,443,445,993,995,3306,3389,5432,5900,6379,8080,8443,9200"
+        elif echo "{{ports}}" | grep -q "-"; then
+          START=$(echo "{{ports}}" | cut -d- -f1)
+          END=$(echo "{{ports}}" | cut -d- -f2)
+          PORTS=$(seq $START $END | tr '\n' ',' | sed 's/,$//')
+        else
+          PORTS="{{ports}}"
+        fi
+        
+        echo "Scanning ports: $PORTS"
+        echo ""
+        
+        IFS=',' read -ra PORT_LIST <<< "$PORTS"
+        
+        for port in "${PORT_LIST[@]}"; do
+          port=$(echo "$port" | xargs)
+          if nc -z -w {{timeout}} {{host}} $port 2>/dev/null; then
+            # Try to identify service
+            SERVICE=$(grep -w "$port/tcp" /etc/services 2>/dev/null | awk '{print $1}' | head -1)
+            if [ -n "$SERVICE" ]; then
+              echo "✅ Port $port/tcp open ($SERVICE)"
+            else
+              echo "✅ Port $port/tcp open"
+            fi
+          fi
+        done
+        
+        echo ""
+        echo "Scan complete"
+  - name: service_identify
+    description:
+      en: Identify services running on specific ports
+      zh: 识别特定端口上运行的服务
+    parameters:
+      port:
+        type: integer
+        description:
+          en: Port number to check
+          zh: 要检查的端口号
+        required: true
+      host:
+        type: string
+        description:
+          en: Hostname (default: localhost)
+          zh: 主机名（默认：localhost）
+        default: "localhost"
+    implementation:
+      type: shell
+      command: |
+        echo "=== Service Identification: {{host}}:{{port}} ==="
+        echo ""
+        
+        # Check if port is open
+        if nc -z -w 2 {{host}} {{port}} 2>/dev/null; then
+          echo "✅ Port {{port}} is open"
+          echo ""
+          
+          # Try to grab banner
+          echo "=== Banner Grab ==="
+          timeout 3 bash -c "echo '' | nc {{host}} {{port}}" 2>/dev/null | head -5 || echo "No banner received"
+          echo ""
+          
+          # Check common services
+          case {{port}} in
+            21) echo "Likely service: FTP" ;;
+            22) echo "Likely service: SSH" ;;
+            25) echo "Likely service: SMTP" ;;
+            80) echo "Likely service: HTTP" ;;
+            443) echo "Likely service: HTTPS" ;;
+            3306) echo "Likely service: MySQL" ;;
+            5432) echo "Likely service: PostgreSQL" ;;
+            6379) echo "Likely service: Redis" ;;
+            8080) echo "Likely service: HTTP Alternative" ;;
+            9200) echo "Likely service: Elasticsearch" ;;
+            *) echo "Service: Unknown" ;;
+          esac
+          
+          # Try HTTP if applicable
+          if [ {{port}} -eq 80 ] || [ {{port}} -eq 443 ] || [ {{port}} -eq 8080 ]; then
+            echo ""
+            echo "=== HTTP Response ==="
+            curl -s -I -m 3 "http://{{host}}:{{port}}" 2>/dev/null | head -5 || echo "Not HTTP"
+          fi
+        else
+          echo "❌ Port {{port}} is closed or filtered"
+        fi
+  - name: network_interfaces
+    description:
+      en: Show network interfaces and IP addresses
+      zh: 显示网络接口和IP地址
+    parameters:
+      detailed:
+        type: boolean
+        description:
+          en: Show detailed interface information
+          zh: 显示详细的接口信息
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Network Interfaces ==="
+        echo ""
+        
+        if [ "{{detailed}}" = "true" ]; then
+          ifconfig 2>/dev/null || ip addr show 2>/dev/null
+        else
+          echo "=== IP Addresses ==="
+          ifconfig 2>/dev/null | grep -E "inet " | awk '{print $2}' || ip addr show | grep -E "inet " | awk '{print $2}'
+          echo ""
+          echo "=== Interfaces ==="
+          ifconfig 2>/dev/null | grep -E "^[a-z]" | awk '{print $1}' || ip link show | grep -E "^[0-9]+" | awk '{print $2}' | sed 's/://'
+        fi
+        
+        echo ""
+        echo "=== Default Gateway ==="
+        route -n 2>/dev/null | grep "^0.0.0.0" || ip route show default 2>/dev/null
+        echo ""
+        echo "=== DNS Servers ==="
+        cat /etc/resolv.conf 2>/dev/null | grep nameserver | awk '{print $2}'
+  - name: firewall_rules
+    description:
+      en: Show firewall rules and configuration
+      zh: 显示防火墙规则和配置
+    parameters:
+      action:
+        type: string
+        enum: [show, iptables, ufw, firewall-cmd]
+        description:
+          en: Firewall type to check
+          zh: 要检查的防火墙类型
+        default: show
+    implementation:
+      type: shell
+      command: |
+        echo "=== Firewall Rules ==="
+        echo ""
+        
+        case "{{action}}" in
+          "show")
+            # Try to auto-detect firewall
+            if command -v ufw &> /dev/null; then
+              echo "=== UFW Status ==="
+              ufw status verbose 2>/dev/null
+            elif command -v firewall-cmd &> /dev/null; then
+              echo "=== Firewalld Status ==="
+              firewall-cmd --list-all 2>/dev/null
+            elif command -v iptables &> /dev/null; then
+              echo "=== IPTables Rules ==="
+              iptables -L -n -v 2>/dev/null | head -30
+            else
+              echo "No firewall detected"
+            fi
+            ;;
+          "iptables")
+            echo "=== IPTables Rules ==="
+            iptables -L -n -v 2>/dev/null | head -50
+            ;;
+          "ufw")
+            echo "=== UFW Status ==="
+            ufw status verbose 2>/dev/null
+            ;;
+          "firewall-cmd")
+            echo "=== Firewalld Status ==="
+            firewall-cmd --list-all 2>/dev/null
+            ;;
+        esac

@@ -1,0 +1,53 @@
+version: 1.1.0
+premium: true
+name: CSV Analyzer
+description:
+  en: Analyze CSV files for statistics, patterns, and data quality.
+  zh: 分析CSV文件的统计信息、模式和数据质量。
+tools:
+  - name: analyze_csv
+    description:
+      en: Perform analysis on CSV files
+      zh: 对CSV文件执行分析
+    parameters:
+      file_path:
+        type: string
+        description:
+          en: Path to the CSV file
+          zh: CSV文件路径
+        required: true
+      operations:
+        type: array
+        items:
+          type: string
+          enum: [summary, null_counts, unique_counts, column_stats]
+        description:
+          en: Analysis operations to perform
+          zh: 要执行的分析操作
+        default: [summary]
+    implementation:
+      type: shell
+      command: |
+        if [ ! -f "{{file_path}}" ]; then
+          echo "Error: File not found: {{file_path}}"
+          exit 1
+        fi
+        echo "=== CSV Analysis: {{file_path}} ==="
+        echo "Rows: $(wc -l < "{{file_path}}")"
+        echo "Columns: $(head -1 "{{file_path}}" | tr ',' '\n' | wc -l)"
+        if echo "{{operations}}" | grep -q "summary"; then
+          echo "\n--- Summary ---"
+          head -5 "{{file_path}}"
+        fi
+        if echo "{{operations}}" | grep -q "null_counts"; then
+          echo "\n--- Null Counts ---"
+          awk -F, 'NR>1 {for(i=1;i<=NF;i++) if($i=="" || $i=="NA" || $i=="null") null[i]++} END {for(i in null) print "Column " i ": " null[i] " nulls"}' "{{file_path}}"
+        fi
+        if echo "{{operations}}" | grep -q "unique_counts"; then
+          echo "\n--- Unique Value Counts ---"
+          awk -F, 'NR>1 {for(i=1;i<=NF;i++) unique[i][$i]++} END {for(i in unique) {count=0; for(val in unique[i]) count++; print "Column " i ": " count " unique values"}}' "{{file_path}}"
+        fi
+        if echo "{{operations}}" | grep -q "column_stats"; then
+          echo "\n--- Column Statistics ---"
+          awk -F, 'NR>1 {for(i=1;i<=NF;i++) {if($i+0==$i) {sum[i]+=$i; count[i]++; if(min[i]=="" || $i<min[i]) min[i]=$i; if(max[i]=="" || $i>max[i]) max[i]=$i}}} END {for(i in sum) print "Column " i ": min=" min[i] ", max=" max[i] ", avg=" sum[i]/count[i]}' "{{file_path}}"
+        fi

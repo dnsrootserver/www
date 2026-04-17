@@ -1,0 +1,23 @@
+name: base64-encode
+version: "1.1.0"
+description: "Encode/decode Base64 strings"
+description_zh: "Base64 编码/解码"
+author: agentforge
+category: developer
+triggers: ["base64", "encode", "decode"]
+triggers_zh: ["base64编码", "base64解码", "编码", "解码"]
+tags: [developer, utility]
+steps:
+  - tool: shell
+    params:
+      command: |
+        INPUT="{{ input | regex_search('(?:encode|decode|base64)\\s*(.*)', '\\1') }}"
+        if echo "{{ input }}" | grep -qi "decode"; then
+          echo "$INPUT" | base64 -d 2>/dev/null || echo "Invalid Base64"
+        else
+          echo -n "$INPUT" | base64
+        fi
+      timeout: 5
+    output: result
+  - tool: output
+    params: {message: "{{ result.stdout }}", format: panel, title: "Base64"}

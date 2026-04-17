@@ -1,0 +1,208 @@
+version: 1.1.0
+premium: true
+name: Medium Articles
+description:
+  en: Search and retrieve popular Medium articles, get author details, and track topics.
+  zh: 搜索和获取热门Medium文章，获取作者详情，追踪主题。
+tools:
+  - name: search_articles
+    description:
+      en: Search Medium articles by keyword or topic
+      zh: 按关键词或主题搜索Medium文章
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of articles to return
+          zh: 返回文章数量
+        default: 20
+      sort:
+        type: string
+        enum: [latest, popular, relevant]
+        description:
+          en: Sort results by
+          zh: 结果排序方式
+        default: relevant
+    implementation:
+      type: shell
+      command: |
+        echo "Searching Medium for: {{query}}"
+        # Medium doesn't have a public API, so we use RSS or scraping
+        # Using Medium's RSS feed for tags/topics
+        
+        # Clean query for URL
+        query_clean=$(echo "{{query}}" | tr ' ' '-')
+        
+        curl -s "https://medium.com/feed/tag/$query_clean" | python3 << 'EOF'
+        import feedparser
+        import json
+        import sys
+        
+        feed = feedparser.parse(sys.stdin.read())
+        
+        articles = []
+        for entry in feed.entries[:{{limit}}]:
+            # Extract image from content if available
+            content = entry.get('content', [{}])[0].get('value', '')
+            image_url = ""
+            if '<img' in content:
+                import re
+                img_match = re.search(r'<img[^>]*src="([^"]*)"', content)
+                if img_match:
+                    image_url = img_match.group(1)
+            
+            articles.append({
+                'title': entry.get('title', 'No title'),
+                'url': entry.get('link', ''),
+                'author': entry.get('author', 'Unknown'),
+                'published': entry.get('published', ''),
+                'categories': [tag.get('term', '') for tag in entry.get('tags', [])],
+                'image_url': image_url,
+                'reading_time': len(content.split()) // 200 if content else 0  # Rough estimate
+            })
+        
+        print(json.dumps(articles, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: get_trending_articles
+    description:
+      en: Get trending articles on Medium
+      zh: 获取Medium热门文章
+    parameters:
+      topic:
+        type: string
+        description:
+          en: Topic or tag to filter by
+          zh: 要过滤的主题或标签
+        default: null
+      limit:
+        type: integer
+        description:
+          en: Number of articles to return
+          zh: 返回文章数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        if [ -n "{{topic}}" ] && [ "{{topic}}" != "null" ]; then
+          topic_clean=$(echo "{{topic}}" | tr ' ' '-')
+          url="https://medium.com/feed/tag/$topic_clean"
+          echo "Fetching trending articles for topic: {{topic}}"
+        else
+          url="https://medium.com/feed"
+          echo "Fetching trending articles on Medium"
+        fi
+        
+        curl -s "$url" | python3 << 'EOF'
+        import feedparser
+        import json
+        import sys
+        
+        feed = feedparser.parse(sys.stdin.read())
+        
+        # Sort by published date (assuming newer = more trending)
+        entries = sorted(feed.entries, key=lambda x: x.get('published_parsed', ''), reverse=True)
+        
+        articles = []
+        for entry in entries[:{{limit}}]:
+            articles.append({
+                'title': entry.get('title', 'No title'),
+                'url': entry.get('link', ''),
+                'author': entry.get('author', 'Unknown'),
+                'published': entry.get('published', ''),
+                'categories': [tag.get('term', '') for tag in entry.get('tags', [])]
+            })
+        
+        print(json.dumps(articles, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: get_article_content
+    description:
+      en: Get full content of a Medium article
+      zh: 获取Medium文章的完整内容
+    parameters:
+      url:
+        type: string
+        description:
+          en: Medium article URL
+          zh: Medium文章URL
+        required: true
+    implementation:
+      type: shell
+      command: |
+        echo "Fetching article: {{url}}"
+        curl -s "{{url}}" | python3 << 'EOF'
+        import re
+        import json
+        import sys
+        from html.parser import HTMLParser
+        
+        html = sys.stdin.read()
+        
+        # Extract article content (simplified)
+        # Note: Medium has anti-scraping measures, so this is basic
+        
+        title_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL)
+        author_match = re.search(r'<a[^>]*class="[^"]*author[^"]*"[^>]*>(.*?)</a>', html, re.DOTALL)
+        content_match = re.search(r'<article[^>]*>(.*?)</article>', html, re.DOTALL)
+        
+        def clean_html(text):
+            # Remove HTML tags
+            text = re.sub(r'<[^>]+>', ' ', text)
+            # Remove extra whitespace
+            text = re.sub(r'\s+', ' ', text)
+            return text.strip()
+        
+        article = {
+            'title': clean_html(title_match.group(1)) if title_match else 'Unknown',
+            'author': clean_html(author_match.group(1)) if author_match else 'Unknown',
+            'content_preview': clean_html(content_match.group(1))[:1000] if content_match else 'Content not available',
+            'url': '{{url}}'
+        }
+        
+        print(json.dumps(article, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: get_author_info
+    description:
+      en: Get information about a Medium author
+      zh: 获取Medium作者信息
+    parameters:
+      username:
+        type: string
+        description:
+          en: Medium username (without @)
+          zh: Medium用户名（不带@）
+        required: true
+    implementation:
+      type: shell
+      command: |
+        echo "Fetching author info: {{username}}"
+        curl -s "https://medium.com/@{{username}}" | python3 << 'EOF'
+        import re
+        import json
+        import sys
+        
+        html = sys.stdin.read()
+        
+        # Extract author information
+        name_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL)
+        bio_match = re.search(r'<div[^>]*class="[^"]*bio[^"]*"[^>]*>(.*?)</div>', html, re.DOTALL)
+        followers_match = re.search(r'(\d[\d,]*)\s*followers?', html, re.IGNORECASE)
+        
+        author = {
+            'username': '{{username}}',
+            'name': re.sub(r'<[^>]+>', '', name_match.group(1)).strip() if name_match else 'Unknown',
+            'bio': re.sub(r'<[^>]+>', '', bio_match.group(1)).strip() if bio_match else 'No bio available',
+            'followers': followers_match.group(1) if followers_match else 'Unknown',
+            'profile_url': 'https://medium.com/@{{username}}'
+        }
+        
+        print(json.dumps(author, indent=2, ensure_ascii=False))
+        EOF

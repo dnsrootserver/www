@@ -1,0 +1,275 @@
+version: 1.1.0
+premium: true
+name: Nginx Manager
+description:
+  en: Manage Nginx configuration, test configs, view logs, and monitor performance.
+  zh: 管理Nginx配置，测试配置，查看日志，并监控性能。
+triggers:
+  en:
+    - "nginx"
+    - "nginx manager"
+    - "nginx config"
+    - "nginx logs"
+    - "web server"
+  zh:
+    - "nginx"
+    - "nginx管理器"
+    - "nginx配置"
+    - "nginx日志"
+    - "web服务器"
+tools:
+  - name: nginx_status
+    description:
+      en: Show Nginx status and configuration
+      zh: 显示Nginx状态和配置
+    parameters:
+      detailed:
+        type: boolean
+        description:
+          en: Show detailed configuration
+          zh: 显示详细配置
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Nginx Status ==="
+        echo ""
+        
+        # Check if nginx is installed
+        if ! command -v nginx &> /dev/null; then
+          echo "❌ Nginx is not installed"
+          exit 1
+        fi
+        
+        echo "=== Version ==="
+        nginx -v 2>&1
+        echo ""
+        
+        echo "=== Service Status ==="
+        if systemctl is-active nginx >/dev/null 2>&1; then
+          echo "✅ Nginx is running"
+          systemctl status nginx 2>/dev/null | head -10
+        else
+          echo "❌ Nginx is not running"
+        fi
+        
+        echo ""
+        echo "=== Configuration Test ==="
+        nginx -t 2>&1
+        
+        if [ "{{detailed}}" = "true" ]; then
+          echo ""
+          echo "=== Configuration Files ==="
+          echo "Main config: $(nginx -V 2>&1 | grep "configure arguments" | sed 's/.*--conf-path=\([^ ]*\).*/\1/')"
+          echo ""
+          echo "=== Included Configs ==="
+          grep -r "include" /etc/nginx/nginx.conf 2>/dev/null | grep -v "#" | head -10
+        fi
+  - name: nginx_config_test
+    description:
+      en: Test Nginx configuration syntax
+      zh: 测试Nginx配置语法
+    parameters:
+      config_file:
+        type: string
+        description:
+          en: Specific config file to test (optional)
+          zh: 要测试的特定配置文件（可选）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== Nginx Configuration Test ==="
+        echo ""
+        
+        if [ -n "{{config_file}}" ] && [ "{{config_file}}" != "null" ]; then
+          echo "Testing: {{config_file}}"
+          nginx -t -c "{{config_file}}" 2>&1
+        else
+          echo "Testing main configuration..."
+          nginx -t 2>&1
+        fi
+        
+        echo ""
+        echo "=== Configuration Syntax Check ==="
+        if nginx -t 2>&1 | grep -q "successful"; then
+          echo "✅ Configuration syntax is valid"
+        else
+          echo "❌ Configuration syntax has errors"
+        fi
+  - name: nginx_logs
+    description:
+      en: View and analyze Nginx logs
+      zh: 查看和分析Nginx日志
+    parameters:
+      log_type:
+        type: string
+        enum: [access, error, both]
+        description:
+          en: Type of log to view
+          zh: 要查看的日志类型
+        default: both
+      lines:
+        type: integer
+        description:
+          en: Number of lines to show
+          zh: 显示的行数
+        default: 50
+      filter:
+        type: string
+        description:
+          en: Filter pattern (grep)
+          zh: 过滤模式（grep）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== Nginx Logs ==="
+        echo ""
+        
+        if [ "{{log_type}}" = "access" ] || [ "{{log_type}}" = "both" ]; then
+          echo "=== Access Log (last {{lines}} lines) ==="
+          if [ -n "{{filter}}" ] && [ "{{filter}}" != "null" ]; then
+            tail -{{lines}} /var/log/nginx/access.log 2>/dev/null | grep "{{filter}}" || echo "No matching entries found"
+          else
+            tail -{{lines}} /var/log/nginx/access.log 2>/dev/null || echo "Access log not found"
+          fi
+          echo ""
+        fi
+        
+        if [ "{{log_type}}" = "error" ] || [ "{{log_type}}" = "both" ]; then
+          echo "=== Error Log (last {{lines}} lines) ==="
+          if [ -n "{{filter}}" ] && [ "{{filter}}" != "null" ]; then
+            tail -{{lines}} /var/log/nginx/error.log 2>/dev/null | grep "{{filter}}" || echo "No matching entries found"
+          else
+            tail -{{lines}} /var/log/nginx/error.log 2>/dev/null || echo "Error log not found"
+          fi
+        fi
+  - name: nginx_vhosts
+    description:
+      en: List and manage virtual hosts
+      zh: 列出和管理虚拟主机
+    parameters:
+      show_config:
+        type: boolean
+        description:
+          en: Show configuration for each vhost
+          zh: 显示每个虚拟主机的配置
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Nginx Virtual Hosts ==="
+        echo ""
+        
+        echo "=== Enabled Sites ==="
+        ls -la /etc/nginx/sites-enabled/ 2>/dev/null || ls -la /etc/nginx/conf.d/ 2>/dev/null || echo "No sites-enabled or conf.d directory found"
+        echo ""
+        
+        echo "=== Available Sites ==="
+        ls -la /etc/nginx/sites-available/ 2>/dev/null || echo "No sites-available directory found"
+        echo ""
+        
+        if [ "{{show_config}}" = "true" ]; then
+          echo "=== Virtual Host Configurations ==="
+          for site in /etc/nginx/sites-enabled/*; do
+            if [ -f "$site" ]; then
+              echo "--- $(basename "$site") ---"
+              grep -E "server_name|listen|root|proxy_pass" "$site" 2>/dev/null | head -10
+              echo ""
+            fi
+          done
+        fi
+  - name: nginx_reload
+    description:
+      en: Reload or restart Nginx
+      zh: 重新加载或重启Nginx
+    parameters:
+      action:
+        type: string
+        enum: [reload, restart, stop, start]
+        description:
+          en: Action to perform
+          zh: 要执行的操作
+        default: reload
+      test_first:
+        type: boolean
+        description:
+          en: Test configuration before reload
+          zh: 重新加载前测试配置
+        default: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== Nginx {{action}} ==="
+        echo ""
+        
+        if [ "{{test_first}}" = "true" ] && [ "{{action}}" = "reload" ]; then
+          echo "Testing configuration..."
+          if ! nginx -t 2>&1 | grep -q "successful"; then
+            echo "❌ Configuration test failed. Aborting {{action}}."
+            nginx -t 2>&1
+            exit 1
+          fi
+          echo "✅ Configuration test passed"
+          echo ""
+        fi
+        
+        case "{{action}}" in
+          "reload")
+            echo "Reloading Nginx..."
+            systemctl reload nginx 2>/dev/null || nginx -s reload 2>&1
+            ;;
+          "restart")
+            echo "Restarting Nginx..."
+            systemctl restart nginx 2>/dev/null || nginx -s stop && nginx 2>&1
+            ;;
+          "stop")
+            echo "Stopping Nginx..."
+            systemctl stop nginx 2>/dev/null || nginx -s stop 2>&1
+            ;;
+          "start")
+            echo "Starting Nginx..."
+            systemctl start nginx 2>/dev/null || nginx 2>&1
+            ;;
+        esac
+        
+        echo ""
+        echo "=== Status ==="
+        systemctl status nginx 2>/dev/null | head -5 || ps aux | grep nginx | grep -v grep
+  - name: nginx_performance
+    description:
+      en: Monitor Nginx performance metrics
+      zh: 监控Nginx性能指标
+    parameters:
+      enable_status:
+        type: boolean
+        description:
+          en: Enable stub_status if not configured
+          zh: 如果未配置则启用stub_status
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Nginx Performance ==="
+        echo ""
+        
+        # Check for stub_status module
+        if nginx -V 2>&1 | grep -q "http_stub_status_module"; then
+          echo "✅ stub_status module is available"
+        else
+          echo "⚠️  stub_status module is not available"
+        fi
+        
+        echo ""
+        echo "=== Active Connections ==="
+        # Try to get status from common endpoints
+        curl -s http://localhost/nginx_status 2>/dev/null || curl -s http://127.0.0.1/nginx_status 2>/dev/null || echo "stub_status not configured"
+        
+        echo ""
+        echo "=== Process Info ==="
+        ps aux | grep nginx | grep -v grep
+        
+        echo ""
+        echo "=== Worker Processes ==="
+        pgrep -c nginx 2>/dev/null || echo "Cannot count nginx processes"

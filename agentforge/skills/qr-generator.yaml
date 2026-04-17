@@ -1,0 +1,38 @@
+name: qr-generator
+version: "1.1.0"
+description: "Generate QR codes from text or URLs"
+description_zh: "从文本或URL生成二维码"
+author: agentforge
+category: utility
+triggers: ["generate qr", "qr code", "create qr", "make qr", "qr generator"]
+triggers_zh: ["生成二维码", "二维码", "创建二维码", "制作二维码"]
+tags: [qr, utility, web]
+steps:
+  - tool: regex_extract
+    params: {text: "{{ input }}", pattern: "https?://\\\\S+", var: urls}
+  - tool: python
+    params:
+      code: |
+        text = "{{ input }}".strip()
+        if not text:
+            text = "https://agentforge.dev"
+        
+        # Use QR Server API
+        import urllib.parse
+        encoded = urllib.parse.quote(text)
+        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={encoded}"
+        
+        result = f"""📱 QR Code Generated!
+
+Text/URL: {text}
+QR Code URL: {qr_url}
+
+You can view or download the QR code by visiting the URL above.
+The QR code will be 200x200 pixels."""
+        print(result)
+      var: result
+  - tool: output
+    params:
+      message: "{{ result }}"
+      format: panel
+      title: "QR Code Generator"

@@ -1,0 +1,197 @@
+version: 1.1.0
+premium: true
+name: Docker Manager
+description:
+  en: Manage Docker containers, images, volumes, networks, and compose stacks with comprehensive commands.
+  zh: 管理Docker容器、镜像、卷、网络和Compose堆栈，提供全面的命令。
+triggers:
+  en:
+    - "docker"
+    - "container"
+    - "docker ps"
+    - "docker images"
+    - "docker logs"
+    - "docker stats"
+    - "docker compose"
+  zh:
+    - "docker"
+    - "容器"
+    - "docker ps"
+    - "docker images"
+    - "docker logs"
+    - "docker stats"
+    - "docker compose"
+tools:
+  - name: docker_ps
+    description:
+      en: List Docker containers with status, ports, and resource usage
+      zh: 列出Docker容器的状态、端口和资源使用情况
+    parameters:
+      all:
+        type: boolean
+        description:
+          en: Show all containers (including stopped)
+          zh: 显示所有容器（包括已停止的）
+        default: true
+      format:
+        type: string
+        description:
+          en: Output format (table, json, or custom Go template)
+          zh: 输出格式（table、json或自定义Go模板）
+        default: "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}"
+    implementation:
+      type: shell
+      command: |
+        if [ "{{all}}" = "true" ]; then
+          ALL_FLAG="-a"
+        else
+          ALL_FLAG=""
+        fi
+        docker ps $ALL_FLAG --format "{{format}}" 2>/dev/null || echo "Docker not available or no containers found"
+  - name: docker_images
+    description:
+      en: List Docker images with repository, tag, size, and ID
+      zh: 列出Docker镜像的仓库、标签、大小和ID
+    parameters:
+      dangling:
+        type: boolean
+        description:
+          en: Show only dangling images
+          zh: 仅显示悬空镜像
+        default: false
+    implementation:
+      type: shell
+      command: |
+        if [ "{{dangling}}" = "true" ]; then
+          docker images -f "dangling=true" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.ID}}" 2>/dev/null
+        else
+          docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.ID}}" 2>/dev/null
+        fi
+  - name: docker_stats
+    description:
+      en: Show real-time resource usage statistics for containers
+      zh: 显示容器的实时资源使用统计
+    parameters:
+      no_stream:
+        type: boolean
+        description:
+          en: Disable streaming stats (one snapshot only)
+          zh: 禁用流式统计（仅一次快照）
+        default: true
+    implementation:
+      type: shell
+      command: |
+        if [ "{{no_stream}}" = "true" ]; then
+          docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" 2>/dev/null
+        else
+          docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" 2>/dev/null
+        fi
+  - name: docker_logs
+    description:
+      en: Show logs for a specific container
+      zh: 显示特定容器的日志
+    parameters:
+      container:
+        type: string
+        description:
+          en: Container name or ID
+          zh: 容器名称或ID
+        required: true
+      tail:
+        type: integer
+        description:
+          en: Number of lines to show from the end
+          zh: 从末尾显示的行数
+        default: 50
+      since:
+        type: string
+        description:
+          en: Show logs since timestamp (e.g., 2023-01-01T00:00:00) or relative (e.g., 1h)
+          zh: 显示自时间戳以来的日志（例如2023-01-01T00:00:00）或相对时间（例如1h）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        SINCE_FLAG=""
+        if [ -n "{{since}}" ] && [ "{{since}}" != "null" ]; then
+          SINCE_FLAG="--since={{since}}"
+        fi
+        docker logs --tail={{tail}} $SINCE_FLAG {{container}} 2>&1 | tail -100
+  - name: docker_compose
+    description:
+      en: Manage Docker Compose services
+      zh: 管理Docker Compose服务
+    parameters:
+      action:
+        type: string
+        enum: [ps, up, down, logs, restart, pull, build]
+        description:
+          en: Compose action to perform
+          zh: 要执行的Compose操作
+        default: ps
+      service:
+        type: string
+        description:
+          en: Specific service name (optional)
+          zh: 特定服务名称（可选）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        COMPOSE_CMD=""
+        if command -v docker-compose &> /dev/null; then
+          COMPOSE_CMD="docker-compose"
+        elif docker compose version &> /dev/null; then
+          COMPOSE_CMD="docker compose"
+        else
+          echo "Neither docker-compose nor docker compose available"
+          exit 1
+        fi
+        
+        case "{{action}}" in
+          "ps")
+            $COMPOSE_CMD ps 2>/dev/null
+            ;;
+          "up")
+            $COMPOSE_CMD up -d {{service}} 2>&1
+            ;;
+          "down")
+            $COMPOSE_CMD down {{service}} 2>&1
+            ;;
+          "logs")
+            $COMPOSE_CMD logs --tail=50 {{service}} 2>&1
+            ;;
+          "restart")
+            $COMPOSE_CMD restart {{service}} 2>&1
+            ;;
+          "pull")
+            $COMPOSE_CMD pull {{service}} 2>&1
+            ;;
+          "build")
+            $COMPOSE_CMD build {{service}} 2>&1
+            ;;
+        esac
+  - name: docker_system
+    description:
+      en: Show Docker disk usage and system information
+      zh: 显示Docker磁盘使用情况和系统信息
+    parameters:
+      prune:
+        type: boolean
+        description:
+          en: Run system prune to clean up unused resources
+          zh: 运行系统清理以清除未使用的资源
+        default: false
+    implementation:
+      type: shell
+      command: |
+        if [ "{{prune}}" = "true" ]; then
+          echo "Running docker system prune..."
+          docker system prune -f 2>&1
+        else
+          echo "=== Docker Disk Usage ==="
+          docker system df 2>/dev/null
+          echo ""
+          echo "=== Docker System Info ==="
+          docker info --format '{{.ServerVersion}}' 2>/dev/null
+        fi

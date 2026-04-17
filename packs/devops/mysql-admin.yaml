@@ -1,0 +1,281 @@
+version: 1.1.0
+premium: true
+name: MySQL Admin
+description:
+  en: Perform MySQL administration tasks including status, queries, backups, and optimization.
+  zh: 执行MySQL管理任务，包括状态、查询、备份和优化。
+triggers:
+  en:
+    - "mysql"
+    - "mysql admin"
+    - "database admin"
+    - "mysql status"
+    - "sql admin"
+  zh:
+    - "mysql"
+    - "mysql管理"
+    - "数据库管理"
+    - "mysql状态"
+    - "sql管理"
+tools:
+  - name: mysql_status
+    description:
+      en: Show MySQL server status and metrics
+      zh: 显示MySQL服务器状态和指标
+    parameters:
+      host:
+        type: string
+        description:
+          en: MySQL host
+          zh: MySQL主机
+        default: "localhost"
+      user:
+        type: string
+        description:
+          en: MySQL user
+          zh: MySQL用户
+        default: "root"
+      password:
+        type: string
+        description:
+          en: MySQL password (use environment variable for security)
+          zh: MySQL密码（使用环境变量以确保安全）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== MySQL Status ==="
+        echo ""
+        
+        # Build MySQL command
+        MYSQL_CMD="mysql -h {{host}} -u {{user}}"
+        if [ -n "{{password}}" ] && [ "{{password}}" != "null" ]; then
+          MYSQL_CMD="$MYSQL_CMD -p{{password}}"
+        fi
+        
+        echo "=== Server Status ==="
+        $MYSQL_CMD -e "STATUS;" 2>/dev/null || echo "Cannot connect to MySQL"
+        
+        echo ""
+        echo "=== Process List ==="
+        $MYSQL_CMD -e "SHOW PROCESSLIST;" 2>/dev/null | head -20
+        
+        echo ""
+        echo "=== Global Status (key metrics) ==="
+        $MYSQL_CMD -e "SHOW GLOBAL STATUS WHERE Variable_name IN ('Threads_connected', 'Threads_running', 'Queries', 'Slow_queries', 'Uptime', 'Connections', 'Aborted_connects', 'Bytes_received', 'Bytes_sent');" 2>/dev/null
+  - name: mysql_queries
+    description:
+      en: Run MySQL queries and analyze performance
+      zh: 运行MySQL查询并分析性能
+    parameters:
+      query:
+        type: string
+        description:
+          en: SQL query to execute
+          zh: 要执行的SQL查询
+        required: true
+      host:
+        type: string
+        description:
+          en: MySQL host
+          zh: MySQL主机
+        default: "localhost"
+      user:
+        type: string
+        description:
+          en: MySQL user
+          zh: MySQL用户
+        default: "root"
+      database:
+        type: string
+        description:
+          en: Database name
+          zh: 数据库名称
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== MySQL Query Execution ==="
+        echo ""
+        
+        MYSQL_CMD="mysql -h {{host}} -u {{user}}"
+        if [ -n "{{database}}" ] && [ "{{database}}" != "null" ]; then
+          MYSQL_CMD="$MYSQL_CMD {{database}}"
+        fi
+        
+        echo "Query: {{query}}"
+        echo ""
+        
+        $MYSQL_CMD -e "{{query}}" 2>/dev/null || echo "Query execution failed"
+  - name: mysql_databases
+    description:
+      en: List databases and their sizes
+      zh: 列出数据库及其大小
+    parameters:
+      host:
+        type: string
+        description:
+          en: MySQL host
+          zh: MySQL主机
+        default: "localhost"
+      user:
+        type: string
+        description:
+          en: MySQL user
+          zh: MySQL用户
+        default: "root"
+    implementation:
+      type: shell
+      command: |
+        echo "=== MySQL Databases ==="
+        echo ""
+        
+        MYSQL_CMD="mysql -h {{host}} -u {{user}}"
+        
+        echo "=== Database List ==="
+        $MYSQL_CMD -e "SHOW DATABASES;" 2>/dev/null || echo "Cannot list databases"
+        
+        echo ""
+        echo "=== Database Sizes ==="
+        $MYSQL_CMD -e "SELECT table_schema 'Database', ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) 'Size (MB)' FROM information_schema.tables GROUP BY table_schema ORDER BY SUM(data_length + index_length) DESC;" 2>/dev/null || echo "Cannot retrieve database sizes"
+  - name: mysql_tables
+    description:
+      en: Show tables and their sizes for a database
+      zh: 显示数据库的表及其大小
+    parameters:
+      database:
+        type: string
+        description:
+          en: Database name
+          zh: 数据库名称
+        required: true
+      host:
+        type: string
+        description:
+          en: MySQL host
+          zh: MySQL主机
+        default: "localhost"
+      user:
+        type: string
+        description:
+          en: MySQL user
+          zh: MySQL用户
+        default: "root"
+    implementation:
+      type: shell
+      command: |
+        echo "=== MySQL Tables: {{database}} ==="
+        echo ""
+        
+        MYSQL_CMD="mysql -h {{host}} -u {{user}}"
+        
+        echo "=== Table List ==="
+        $MYSQL_CMD -e "USE {{database}}; SHOW TABLES;" 2>/dev/null || echo "Cannot list tables"
+        
+        echo ""
+        echo "=== Table Sizes ==="
+        $MYSQL_CMD -e "SELECT table_name 'Table', ROUND(((data_length + index_length) / 1024 / 1024), 2) 'Size (MB)', table_rows 'Rows' FROM information_schema.TABLES WHERE table_schema = '{{database}}' ORDER BY (data_length + index_length) DESC;" 2>/dev/null || echo "Cannot retrieve table sizes"
+  - name: mysql_backup
+    description:
+      en: Backup MySQL database
+      zh: 备份MySQL数据库
+    parameters:
+      database:
+        type: string
+        description:
+          en: Database name to backup
+          zh: 要备份的数据库名称
+        required: true
+      backup_dir:
+        type: string
+        description:
+          en: Backup directory
+          zh: 备份目录
+        default: "/tmp"
+      host:
+        type: string
+        description:
+          en: MySQL host
+          zh: MySQL主机
+        default: "localhost"
+      user:
+        type: string
+        description:
+          en: MySQL user
+          zh: MySQL用户
+        default: "root"
+      compress:
+        type: boolean
+        description:
+          en: Compress backup with gzip
+          zh: 使用gzip压缩备份
+        default: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== MySQL Backup: {{database}} ==="
+        echo ""
+        
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        BACKUP_FILE="{{backup_dir}}/{{database}}_${TIMESTAMP}.sql"
+        
+        echo "Starting backup..."
+        echo "Database: {{database}}"
+        echo "Backup file: $BACKUP_FILE"
+        
+        if [ "{{compress}}" = "true" ]; then
+          BACKUP_FILE="${BACKUP_FILE}.gz"
+          mysqldump -h {{host}} -u {{user}} {{database}} 2>/dev/null | gzip > "$BACKUP_FILE"
+        else
+          mysqldump -h {{host}} -u {{user}} {{database}} > "$BACKUP_FILE" 2>/dev/null
+        fi
+        
+        if [ $? -eq 0 ]; then
+          echo "✅ Backup completed successfully"
+          echo "File size: $(du -h "$BACKUP_FILE" | cut -f1)"
+        else
+          echo "❌ Backup failed"
+        fi
+  - name: mysql_slow_queries
+    description:
+      en: Analyze slow queries and performance
+      zh: 分析慢查询和性能
+    parameters:
+      host:
+        type: string
+        description:
+          en: MySQL host
+          zh: MySQL主机
+        default: "localhost"
+      user:
+        type: string
+        description:
+          en: MySQL user
+          zh: MySQL用户
+        default: "root"
+    implementation:
+      type: shell
+      command: |
+        echo "=== MySQL Slow Query Analysis ==="
+        echo ""
+        
+        MYSQL_CMD="mysql -h {{host}} -u {{user}}"
+        
+        echo "=== Slow Query Status ==="
+        $MYSQL_CMD -e "SHOW GLOBAL STATUS LIKE 'Slow_queries';" 2>/dev/null
+        
+        echo ""
+        echo "=== Slow Query Log Status ==="
+        $MYSQL_CMD -e "SHOW VARIABLES LIKE 'slow_query_log%';" 2>/dev/null
+        
+        echo ""
+        echo "=== Long Query Time ==="
+        $MYSQL_CMD -e "SHOW VARIABLES LIKE 'long_query_time';" 2>/dev/null
+        
+        echo ""
+        echo "=== Current Processes ==="
+        $MYSQL_CMD -e "SHOW PROCESSLIST;" 2>/dev/null | awk '$6 > 5 {print}' | head -10
+        
+        echo ""
+        echo "=== Index Usage ==="
+        $MYSQL_CMD -e "SELECT table_schema, table_name, index_length, data_length FROM information_schema.tables WHERE table_schema NOT IN ('mysql', 'information_schema', 'performance_schema') ORDER BY index_length DESC LIMIT 10;" 2>/dev/null

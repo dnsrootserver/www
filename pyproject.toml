@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentforge"
-version = "1.0.0"
+version = "1.1.0"
 description = "Declarative AI Agent Skill Framework — Build agent skills with YAML, not code"
 readme = "README.md"
 license = {text = "MIT"}

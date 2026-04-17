@@ -1,0 +1,300 @@
+version: 1.1.0
+premium: true
+name: Redis Monitor
+description:
+  en: Monitor Redis server performance, memory usage, keys, and client connections.
+  zh: 监控Redis服务器性能、内存使用、键和客户端连接。
+triggers:
+  en:
+    - "redis"
+    - "redis monitor"
+    - "redis status"
+    - "redis cache"
+    - "redis memory"
+  zh:
+    - "redis"
+    - "redis监控"
+    - "redis状态"
+    - "redis缓存"
+    - "redis内存"
+tools:
+  - name: redis_status
+    description:
+      en: Show Redis server status and info
+      zh: 显示Redis服务器状态和信息
+    parameters:
+      host:
+        type: string
+        description:
+          en: Redis host
+          zh: Redis主机
+        default: "localhost"
+      port:
+        type: integer
+        description:
+          en: Redis port
+          zh: Redis端口
+        default: 6379
+      password:
+        type: string
+        description:
+          en: Redis password
+          zh: Redis密码
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== Redis Status: {{host}}:{{port}} ==="
+        echo ""
+        
+        REDIS_CMD="redis-cli -h {{host}} -p {{port}}"
+        if [ -n "{{password}}" ] && [ "{{password}}" != "null" ]; then
+          REDIS_CMD="$REDIS_CMD -a {{password}}"
+        fi
+        
+        echo "=== Connection Test ==="
+        if $REDIS_CMD ping 2>/dev/null | grep -q "PONG"; then
+          echo "✅ Redis is responding"
+        else
+          echo "❌ Cannot connect to Redis"
+          exit 1
+        fi
+        
+        echo ""
+        echo "=== Server Info ==="
+        $REDIS_CMD info server 2>/dev/null | grep -E "redis_version|uptime_in_seconds|tcp_port|executable|config_file"
+        
+        echo ""
+        echo "=== Memory Usage ==="
+        $REDIS_CMD info memory 2>/dev/null | grep -E "used_memory_human|used_memory_peak_human|maxmemory_human|mem_fragmentation_ratio"
+        
+        echo ""
+        echo "=== Clients ==="
+        $REDIS_CMD info clients 2>/dev/null | grep -E "connected_clients|blocked_clients"
+        
+        echo ""
+        echo "=== Stats ==="
+        $REDIS_CMD info stats 2>/dev/null | grep -E "total_connections_received|total_commands_processed|instantaneous_ops_per_sec|keyspace_hits|keyspace_misses"
+  - name: redis_memory
+    description:
+      en: Analyze Redis memory usage and keys
+      zh: 分析Redis内存使用和键
+    parameters:
+      host:
+        type: string
+        description:
+          en: Redis host
+          zh: Redis主机
+        default: "localhost"
+      port:
+        type: integer
+        description:
+          en: Redis port
+          zh: Redis端口
+        default: 6379
+      password:
+        type: string
+        description:
+          en: Redis password
+          zh: Redis密码
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== Redis Memory Analysis: {{host}}:{{port}} ==="
+        echo ""
+        
+        REDIS_CMD="redis-cli -h {{host}} -p {{port}}"
+        if [ -n "{{password}}" ] && [ "{{password}}" != "null" ]; then
+          REDIS_CMD="$REDIS_CMD -a {{password}}"
+        fi
+        
+        echo "=== Memory Stats ==="
+        $REDIS_CMD info memory 2>/dev/null | grep -E "used_memory:|used_memory_human|used_memory_rss|used_memory_peak|mem_fragmentation_ratio"
+        
+        echo ""
+        echo "=== Database Stats ==="
+        $REDIS_CMD info keyspace 2>/dev/null | grep -E "^db"
+        
+        echo ""
+        echo "=== Largest Keys (Top 10) ==="
+        $REDIS_CMD --bigkeys 2>/dev/null | tail -20
+        
+        echo ""
+        echo "=== Memory Usage by Key Pattern ==="
+        echo "To analyze specific key patterns, use: redis-cli --memkeys"
+  - name: redis_keys
+    description:
+      en: Manage and analyze Redis keys
+      zh: 管理和分析Redis键
+    parameters:
+      host:
+        type: string
+        description:
+          en: Redis host
+          zh: Redis主机
+        default: "localhost"
+      port:
+        type: integer
+        description:
+          en: Redis port
+          zh: Redis端口
+        default: 6379
+      password:
+        type: string
+        description:
+          en: Redis password
+          zh: Redis密码
+        default: null
+      pattern:
+        type: string
+        description:
+          en: Key pattern to search (e.g., user:*)
+          zh: 要搜索的键模式（例如user:*）
+        default: "*"
+      action:
+        type: string
+        enum: [list, count, type, ttl]
+        description:
+          en: Action to perform
+          zh: 要执行的操作
+        default: count
+    implementation:
+      type: shell
+      command: |
+        echo "=== Redis Keys: {{pattern}} ==="
+        echo ""
+        
+        REDIS_CMD="redis-cli -h {{host}} -p {{port}}"
+        if [ -n "{{password}}" ] && [ "{{password}}" != "null" ]; then
+          REDIS_CMD="$REDIS_CMD -a {{password}}"
+        fi
+        
+        case "{{action}}" in
+          "list")
+            echo "=== Keys matching '{{pattern}}' ==="
+            $REDIS_CMD keys "{{pattern}}" 2>/dev/null | head -50
+            ;;
+          "count")
+            echo "=== Key Count ==="
+            $REDIS_CMD dbsize 2>/dev/null
+            echo ""
+            echo "=== Keys matching '{{pattern}}' ==="
+            $REDIS_CMD keys "{{pattern}}" 2>/dev/null | wc -l
+            ;;
+          "type")
+            echo "=== Key Types ==="
+            for key in $($REDIS_CMD keys "{{pattern}}" 2>/dev/null | head -20); do
+              TYPE=$($REDIS_CMD type "$key" 2>/dev/null)
+              echo "$key: $TYPE"
+            done
+            ;;
+          "ttl")
+            echo "=== Key TTLs ==="
+            for key in $($REDIS_CMD keys "{{pattern}}" 2>/dev/null | head -20); do
+              TTL=$($REDIS_CMD ttl "$key" 2>/dev/null)
+              if [ "$TTL" -eq -1 ]; then
+                echo "$key: no expiry"
+              elif [ "$TLP" -eq -2 ]; then
+                echo "$key: key does not exist"
+              else
+                echo "$key: ${TTL}s"
+              fi
+            done
+            ;;
+        esac
+  - name: redis_clients
+    description:
+      en: Monitor Redis client connections
+      zh: 监控Redis客户端连接
+    parameters:
+      host:
+        type: string
+        description:
+          en: Redis host
+          zh: Redis主机
+        default: "localhost"
+      port:
+        type: integer
+        description:
+          en: Redis port
+          zh: Redis端口
+        default: 6379
+      password:
+        type: string
+        description:
+          en: Redis password
+          zh: Redis密码
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== Redis Clients: {{host}}:{{port}} ==="
+        echo ""
+        
+        REDIS_CMD="redis-cli -h {{host}} -p {{port}}"
+        if [ -n "{{password}}" ] && [ "{{password}}" != "null" ]; then
+          REDIS_CMD="$REDIS_CMD -a {{password}}"
+        fi
+        
+        echo "=== Connected Clients ==="
+        $REDIS_CMD info clients 2>/dev/null | grep -E "connected_clients|maxclients|blocked_clients"
+        
+        echo ""
+        echo "=== Client List ==="
+        $REDIS_CMD client list 2>/dev/null | head -20
+        
+        echo ""
+        echo "=== Client Stats ==="
+        $REDIS_CMD info stats 2>/dev/null | grep -E "total_connections_received|rejected_connections"
+  - name: redis_slowlog
+    description:
+      en: Analyze Redis slow log
+      zh: 分析Redis慢日志
+    parameters:
+      host:
+        type: string
+        description:
+          en: Redis host
+          zh: Redis主机
+        default: "localhost"
+      port:
+        type: integer
+        description:
+          en: Redis port
+          zh: Redis端口
+        default: 6379
+      password:
+        type: string
+        description:
+          en: Redis password
+          zh: Redis密码
+        default: null
+      count:
+        type: integer
+        description:
+          en: Number of slow log entries to show
+          zh: 显示的慢日志条目数量
+        default: 10
+    implementation:
+      type: shell
+      command: |
+        echo "=== Redis Slow Log: {{host}}:{{port}} ==="
+        echo ""
+        
+        REDIS_CMD="redis-cli -h {{host}} -p {{port}}"
+        if [ -n "{{password}}" ] && [ "{{password}}" != "null" ]; then
+          REDIS_CMD="$REDIS_CMD -a {{password}}"
+        fi
+        
+        echo "=== Slow Log Length ==="
+        $REDIS_CMD slowlog len 2>/dev/null
+        
+        echo ""
+        echo "=== Slow Log Entries (last {{count}}) ==="
+        $REDIS_CMD slowlog get {{count}} 2>/dev/null
+        
+        echo ""
+        echo "=== Slow Log Configuration ==="
+        $REDIS_CMD config get slowlog-log-slower-than 2>/dev/null
+        $REDIS_CMD config get slowlog-max-len 2>/dev/null

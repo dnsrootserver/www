@@ -1,0 +1,107 @@
+version: 1.1.0
+premium: true
+name: Format Converter
+description:
+  en: Convert data between formats: CSV, JSON, XML, YAML, TSV, and more.
+  zh: 在格式之间转换数据：CSV、JSON、XML、YAML、TSV等。
+tools:
+  - name: convert_format
+    description:
+      en: Convert file from one format to another
+      zh: 将文件从一种格式转换为另一种格式
+    parameters:
+      input_file:
+        type: string
+        description:
+          en: Input file path
+          zh: 输入文件路径
+        required: true
+      output_format:
+        type: string
+        enum: [csv, json, tsv, yaml, xml]
+        description:
+          en: Target output format
+          zh: 目标输出格式
+        required: true
+      output_file:
+        type: string
+        description:
+          en: Output file path (default: input_file with new extension)
+          zh: 输出文件路径（默认：输入文件带新扩展名）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        input="{{input_file}}"
+        ext="${input##*.}"
+        output="{{output_file}}"
+        if [ -z "$output" ] || [ "$output" = "null" ]; then
+          output="${input%.*}.{{output_format}}"
+        fi
+        # Detect input format
+        case "$ext" in
+          csv|tsv) input_format="csv" ;;
+          json) input_format="json" ;;
+          xml) input_format="xml" ;;
+          yaml|yml) input_format="yaml" ;;
+          *) echo "Error: Unsupported input format: $ext"; exit 1 ;;
+        esac
+        # Convert using Python for reliability
+        python3 << EOF
+        import json
+        import csv
+        import sys
+        # Read input
+        if "$input_format" == "json":
+            with open("$input") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                data = [data]
+        elif "$input_format" == "csv":
+            with open("$input") as f:
+                reader = csv.DictReader(f)
+                data = list(reader)
+        elif "$input_format" == "yaml":
+            import yaml
+            with open("$input") as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict):
+                data = [data]
+        else:
+            print(f"Input format $input_format not fully supported")
+            sys.exit(1)
+        # Write output
+        if "{{output_format}}" == "json":
+            with open("$output", 'w') as f:
+                json.dump(data, f, indent=2)
+        elif "{{output_format}}" == "csv":
+            if not data:
+                open("$output", 'w').close()
+            else:
+                with open("$output", 'w', newline='') as f:
+                    writer = csv.DictWriter(f, fieldnames=data[0].keys())
+                    writer.writeheader()
+                    writer.writerows(data)
+        elif "{{output_format}}" == "tsv":
+            if not data:
+                open("$output", 'w').close()
+            else:
+                with open("$output", 'w', newline='') as f:
+                    writer = csv.DictWriter(f, fieldnames=data[0].keys(), delimiter='\t')
+                    writer.writeheader()
+                    writer.writerows(data)
+        elif "{{output_format}}" == "yaml":
+            import yaml
+            with open("$output", 'w') as f:
+                yaml.dump(data, f, default_flow_style=False)
+        elif "{{output_format}}" == "xml":
+            with open("$output", 'w') as f:
+                f.write('<?xml version="1.0" encoding="UTF-8"?>\n<records>\n')
+                for row in data:
+                    f.write('  <record>\n')
+                    for key, val in row.items():
+                        f.write(f'    <{key}>{val}</{key}>\n')
+                    f.write('  </record>\n')
+                f.write('</records>\n')
+        print(f"Converted $input to $output ({{output_format}})")
+        EOF

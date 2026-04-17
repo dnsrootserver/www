@@ -1,0 +1,285 @@
+version: 1.1.0
+premium: true
+name: Infrastructure Audit
+description:
+  en: Perform security audits on infrastructure, check compliance, and identify vulnerabilities.
+  zh: 对基础设施执行安全审计，检查合规性，并识别漏洞。
+triggers:
+  en:
+    - "infrastructure audit"
+    - "security audit"
+    - "compliance check"
+    - "vulnerability scan"
+    - "infra audit"
+  zh:
+    - "基础设施审计"
+    - "安全审计"
+    - "合规检查"
+    - "漏洞扫描"
+    - "基础设施审计"
+tools:
+  - name: ssh_audit
+    description:
+      en: Audit SSH configuration and security
+      zh: 审计SSH配置和安全性
+    parameters:
+      host:
+        type: string
+        description:
+          en: Host to audit (default: localhost)
+          zh: 要审计的主机（默认：localhost）
+        default: "localhost"
+    implementation:
+      type: shell
+      command: |
+        echo "=== SSH Security Audit: {{host}} ==="
+        echo ""
+        
+        if [ "{{host}}" = "localhost" ]; then
+          echo "=== SSH Configuration ==="
+          cat /etc/ssh/sshd_config 2>/dev/null | grep -v "^#" | grep -v "^$" | head -30
+          
+          echo ""
+          echo "=== Security Checks ==="
+          
+          # Check for root login
+          if grep -q "^PermitRootLogin yes" /etc/ssh/sshd_config 2>/dev/null; then
+            echo "⚠️  Root login is enabled"
+          else
+            echo "✅ Root login is disabled or not explicitly allowed"
+          fi
+          
+          # Check for password authentication
+          if grep -q "^PasswordAuthentication yes" /etc/ssh/sshd_config 2>/dev/null; then
+            echo "⚠️  Password authentication is enabled"
+          else
+            echo "✅ Password authentication is disabled or not explicitly allowed"
+          fi
+          
+          # Check for empty passwords
+          if grep -q "^PermitEmptyPasswords yes" /etc/ssh/sshd_config 2>/dev/null; then
+            echo "❌ Empty passwords are allowed"
+          else
+            echo "✅ Empty passwords are not allowed"
+          fi
+          
+          # Check SSH protocol version
+          if grep -q "^Protocol 1" /etc/ssh/sshd_config 2>/dev/null; then
+            echo "❌ SSH Protocol 1 is enabled (insecure)"
+          else
+            echo "✅ SSH Protocol 1 is not enabled"
+          fi
+        else
+          echo "=== Remote SSH Audit ==="
+          echo "Testing SSH connection to {{host}}..."
+          ssh -o ConnectTimeout=5 -o BatchMode=yes {{host}} "echo 'SSH connection successful'" 2>&1
+        fi
+  - name: user_audit
+    description:
+      en: Audit user accounts and permissions
+      zh: 审计用户账户和权限
+    parameters:
+      check_sudo:
+        type: boolean
+        description:
+          en: Check sudo users
+          zh: 检查sudo用户
+        default: true
+      check_empty:
+        type: boolean
+        description:
+          en: Check for empty passwords
+          zh: 检查空密码
+        default: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== User Account Audit ==="
+        echo ""
+        
+        echo "=== System Users (UID < 1000) ==="
+        awk -F: '$3 < 1000 {print $1}' /etc/passwd | head -20
+        echo ""
+        
+        echo "=== Regular Users (UID >= 1000) ==="
+        awk -F: '$3 >= 1000 {print $1}' /etc/passwd
+        echo ""
+        
+        if [ "{{check_sudo}}" = "true" ]; then
+          echo "=== Sudo Users ==="
+          getent group sudo 2>/dev/null || getent group wheel 2>/dev/null || echo "No sudo/wheel group found"
+          echo ""
+          
+          echo "=== Users with UID 0 ==="
+          awk -F: '$3 == 0 {print $1}' /etc/passwd
+        fi
+        
+        if [ "{{check_empty}}" = "true" ]; then
+          echo ""
+          echo "=== Empty Password Check ==="
+          awk -F: '($2 == "" || $2 == "!") {print $1}' /etc/shadow 2>/dev/null || echo "Cannot check shadow file (requires root)"
+        fi
+  - name: file_permissions
+    description:
+      en: Check critical file permissions
+      zh: 检查关键文件权限
+    parameters:
+      check_suid:
+        type: boolean
+        description:
+          en: Find SUID/SGID files
+          zh: 查找SUID/SGID文件
+        default: true
+      check_writable:
+        type: boolean
+        description:
+          en: Find world-writable files
+          zh: 查找全局可写文件
+        default: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== File Permission Audit ==="
+        echo ""
+        
+        echo "=== Critical File Permissions ==="
+        ls -la /etc/passwd /etc/shadow /etc/group /etc/gshadow 2>/dev/null || echo "Cannot check critical files"
+        echo ""
+        
+        if [ "{{check_suid}}" = "true" ]; then
+          echo "=== SUID/SGID Files ==="
+          find / -type f \( -perm -4000 -o -perm -2000 \) 2>/dev/null | head -20
+          echo ""
+        fi
+        
+        if [ "{{check_writable}}" = "true" ]; then
+          echo "=== World-Writable Directories ==="
+          find / -type d -perm -0002 2>/dev/null | grep -v proc | head -10
+          echo ""
+          
+          echo "=== World-Writable Files (in /etc) ==="
+          find /etc -type f -perm -0002 2>/dev/null | head -10
+        fi
+  - name: network_audit
+    description:
+      en: Audit network security and open ports
+      zh: 审计网络安全和开放端口
+    parameters:
+      check_firewall:
+        type: boolean
+        description:
+          en: Check firewall status
+          zh: 检查防火墙状态
+        default: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== Network Security Audit ==="
+        echo ""
+        
+        echo "=== Open Ports ==="
+        netstat -tuln 2>/dev/null | grep LISTEN || ss -tuln 2>/dev/null | grep LISTEN
+        echo ""
+        
+        if [ "{{check_firewall}}" = "true" ]; then
+          echo "=== Firewall Status ==="
+          if command -v ufw &> /dev/null; then
+            ufw status 2>/dev/null
+          elif command -v firewall-cmd &> /dev/null; then
+            firewall-cmd --state 2>/dev/null
+          elif command -v iptables &> /dev/null; then
+            iptables -L -n 2>/dev/null | head -20
+          else
+            echo "No firewall detected"
+          fi
+        fi
+        
+        echo ""
+        echo "=== IP Forwarding ==="
+        cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo "Cannot check IP forwarding"
+        echo ""
+        
+        echo "=== Listening on All Interfaces ==="
+        netstat -tuln 2>/dev/null | grep "0.0.0.0" | head -10 || ss -tuln | grep "*" | head -10
+  - name: package_audit
+    description:
+      en: Audit installed packages and updates
+      zh: 审计已安装的软件包和更新
+    parameters:
+      check_updates:
+        type: boolean
+        description:
+          en: Check for available updates
+          zh: 检查可用更新
+        default: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== Package Security Audit ==="
+        echo ""
+        
+        if command -v apt &> /dev/null; then
+          echo "=== Package Manager: APT ==="
+          if [ "{{check_updates}}" = "true" ]; then
+            echo "=== Available Security Updates ==="
+            apt list --upgradable 2>/dev/null | grep -i security | head -10 || echo "No security updates found"
+          fi
+          echo ""
+          echo "=== Recently Installed Packages ==="
+          grep " install " /var/log/dpkg.log 2>/dev/null | tail -10
+        elif command -v yum &> /dev/null; then
+          echo "=== Package Manager: YUM ==="
+          if [ "{{check_updates}}" = "true" ]; then
+            echo "=== Available Security Updates ==="
+            yum updateinfo list security 2>/dev/null | head -10 || echo "No security updates found"
+          fi
+        elif command -v dnf &> /dev/null; then
+          echo "=== Package Manager: DNF ==="
+          if [ "{{check_updates}}" = "true" ]; then
+            echo "=== Available Security Updates ==="
+            dnf updateinfo list security 2>/dev/null | head -10 || echo "No security updates found"
+          fi
+        else
+          echo "Unknown package manager"
+        fi
+  - name: docker_audit
+    description:
+      en: Audit Docker security configuration
+      zh: 审计Docker安全配置
+    parameters:
+      scan_images:
+        type: boolean
+        description:
+          en: Scan images for vulnerabilities (if trivy is available)
+          zh: 扫描镜像漏洞（如果trivy可用）
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Docker Security Audit ==="
+        echo ""
+        
+        echo "=== Docker Version ==="
+        docker version --format '{{.Server.Version}}' 2>/dev/null || echo "Docker not available"
+        echo ""
+        
+        echo "=== Docker Info ==="
+        docker info 2>/dev/null | grep -E "Security|Root|Driver" | head -10
+        echo ""
+        
+        echo "=== Running Containers ==="
+        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null
+        echo ""
+        
+        echo "=== Containers Running as Root ==="
+        docker ps -q 2>/dev/null | xargs -I {} docker inspect {} 2>/dev/null | grep -i "user" | grep -v "root" || echo "Cannot check container users"
+        
+        if [ "{{scan_images}}" = "true" ]; then
+          echo ""
+          echo "=== Image Vulnerability Scan ==="
+          if command -v trivy &> /dev/null; then
+            docker images --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | head -3 | xargs -I {} trivy image --severity HIGH,CRITICAL {} 2>/dev/null | head -20
+          else
+            echo "Trivy not available for image scanning"
+          fi
+        fi

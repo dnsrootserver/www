@@ -1,0 +1,344 @@
+version: 1.1.0
+premium: true
+name: Social Analytics
+description:
+  en: Analyze social media metrics, track engagement, and generate performance reports.
+  zh: 分析社交媒体指标，追踪互动，生成绩效报告。
+tools:
+  - name: analyze_engagement
+    description:
+      en: Analyze engagement metrics for social media content
+      zh: 分析社交媒体内容的互动指标
+    parameters:
+      platform:
+        type: string
+        enum: [twitter, instagram, facebook, linkedin, youtube, tiktok]
+        description:
+          en: Social media platform
+          zh: 社交媒体平台
+        required: true
+      content_url:
+        type: string
+        description:
+          en: URL of the content to analyze
+          zh: 要分析的内容URL
+        required: true
+    implementation:
+      type: shell
+      command: |
+        echo "Social Media Engagement Analysis"
+        echo "================================"
+        echo "Platform: {{platform}}"
+        echo "Content: {{content_url}}"
+        echo ""
+        
+        case "{{platform}}" in
+          "twitter")
+            echo "Twitter/X Metrics (requires API access):"
+            echo "- Retweets"
+            echo "- Likes"
+            echo "- Replies"
+            echo "- Quote tweets"
+            echo "- Impressions"
+            echo "- Engagement rate"
+            echo ""
+            echo "To get actual metrics, you need Twitter API v2 access with:"
+            echo "  - tweet.fields=public_metrics,organic_metrics"
+            echo "  - Bearer token authentication"
+            ;;
+          "instagram")
+            echo "Instagram Metrics (requires Instagram Graph API):"
+            echo "- Likes"
+            echo "- Comments"
+            echo "- Shares"
+            echo "- Saves"
+            echo "- Reach"
+            echo "- Impressions"
+            echo "- Engagement rate"
+            echo ""
+            echo "Requires Facebook Business account and Instagram Graph API access."
+            ;;
+          "facebook")
+            echo "Facebook Metrics (requires Graph API):"
+            echo "- Reactions (like, love, haha, wow, sad, angry)"
+            echo "- Comments"
+            echo "- Shares"
+            echo "- Clicks"
+            echo "- Reach"
+            echo "- Impressions"
+            echo ""
+            echo "Requires Facebook Page access token with read_insights permission."
+            ;;
+          "linkedin")
+            echo "LinkedIn Metrics (requires API access):"
+            echo "- Likes/reactions"
+            echo "- Comments"
+            echo "- Shares"
+            echo "- Click-through rate"
+            echo "- Impressions"
+            echo "- Engagement rate"
+            echo ""
+            echo "Requires LinkedIn Company Page API access."
+            ;;
+          "youtube")
+            echo "YouTube Metrics (requires YouTube Data API):"
+            echo "- Views"
+            echo "- Likes"
+            echo "- Comments"
+            echo "- Shares"
+            echo "- Watch time"
+            echo "- Subscribers gained"
+            echo ""
+            echo "Requires YouTube Data API v3 key."
+            ;;
+          "tiktok")
+            echo "TikTok Metrics (requires TikTok API):"
+            echo "- Views"
+            echo "- Likes"
+            echo "- Comments"
+            echo "- Shares"
+            echo "- Engagement rate"
+            echo ""
+            echo "Requires TikTok for Business API access."
+            ;;
+        esac
+        
+        echo ""
+        echo "Calculating Engagement Rate:"
+        echo "Formula: (Total Engagements / Total Impressions) × 100"
+        echo ""
+        echo "Note: Actual metrics require platform-specific API access."
+        echo "Set appropriate API keys/tokens for real data."
+
+  - name: compare_content_performance
+    description:
+      en: Compare performance of multiple social media posts
+      zh: 比较多个社交媒体帖子的表现
+    parameters:
+      platform:
+        type: string
+        enum: [twitter, instagram, facebook, linkedin, youtube, tiktok]
+        description:
+          en: Social media platform
+          zh: �交媒体平台
+        required: true
+      content_urls:
+        type: array
+        items:
+          type: string
+        description:
+          en: List of content URLs to compare
+          zh: 要比较的内容URL列表
+        required: true
+    implementation:
+      type: shell
+      command: |
+        echo "Content Performance Comparison"
+        echo "=============================="
+        echo "Platform: {{platform}}"
+        echo ""
+        
+        # In a real implementation, this would fetch actual metrics
+        echo "Comparison Metrics:"
+        echo "1. Engagement Rate"
+        echo "2. Reach/Impressions"
+        echo "3. Click-through Rate"
+        echo "4. Conversion Rate"
+        echo "5. Sentiment Analysis"
+        echo ""
+        
+        echo "Content URLs to compare:"
+        {% for url in content_urls %}
+        echo "- {{url}}"
+        {% endfor %}
+        
+        echo ""
+        echo "To get actual comparison data:"
+        echo "1. Ensure you have API access for {{platform}}"
+        echo "2. Fetch metrics for each content URL"
+        echo "3. Normalize metrics for fair comparison"
+        echo "4. Generate comparison report"
+
+  - name: generate_report
+    description:
+      en: Generate a social media analytics report
+      zh: 生成社交媒体分析报告
+    parameters:
+      platform:
+        type: string
+        enum: [twitter, instagram, facebook, linkedin, youtube, tiktok, all]
+        description:
+          en: Social media platform or 'all' for multi-platform
+          zh: 社交媒体平台或'all'表示多平台
+        required: true
+      time_period:
+        type: string
+        enum: [7d, 30d, 90d, 1y]
+        description:
+          en: Time period for the report
+          zh: 报告的时间范围
+        default: 30d
+      metrics:
+        type: array
+        items:
+          type: string
+        description:
+          en: Specific metrics to include
+          zh: 要包含的特定指标
+        default: [engagement, reach, followers, impressions]
+    implementation:
+      type: shell
+      command: |
+        echo "Social Media Analytics Report"
+        echo "============================="
+        echo "Platform: {{platform}}"
+        echo "Period: {{time_period}}"
+        echo "Generated: $(date)"
+        echo ""
+        
+        echo "Report Sections:"
+        echo "1. Executive Summary"
+        echo "2. Key Performance Indicators"
+        echo "3. Engagement Analysis"
+        echo "4. Audience Growth"
+        echo "5. Content Performance"
+        echo "6. Competitor Benchmarking"
+        echo "7. Recommendations"
+        echo ""
+        
+        echo "Metrics to include:"
+        {% for metric in metrics %}
+        echo "- {{metric}}"
+        {% endfor %}
+        
+        echo ""
+        echo "Note: This is a template. Actual report generation requires:"
+        echo "1. API access to {{platform}}"
+        echo "2. Historical data collection"
+        echo "3. Data processing and visualization"
+        echo "4. Insight generation"
+
+  - name: track_hashtag_performance
+    description:
+      en: Track performance of a hashtag across platforms
+      zh: 跨平台追踪话题标签表现
+    parameters:
+      hashtag:
+        type: string
+        description:
+          en: Hashtag to track (without #)
+          zh: 要追踪的话题标签（不带#）
+        required: true
+      platforms:
+        type: array
+        items:
+          type: string
+        description:
+          en: Platforms to track on
+          zh: 要追踪的平台
+        default: [twitter, instagram, linkedin]
+    implementation:
+      type: shell
+      command: |
+        echo "Hashtag Performance Tracking"
+        echo "============================"
+        echo "Hashtag: #{{hashtag}}"
+        echo ""
+        
+        for platform in "{{platforms}}"; do
+          echo "Platform: $platform"
+          case "$platform" in
+            "twitter")
+              echo "  - Tweet volume"
+              echo "  - Retweets"
+              echo "  - Likes"
+              echo "  - Impressions"
+              ;;
+            "instagram")
+              echo "  - Post count"
+              echo "  - Reach"
+              echo "  - Impressions"
+              echo "  - Engagement"
+              ;;
+            "linkedin")
+              echo "  - Post count"
+              echo "  - Impressions"
+              echo "  - Engagement"
+              ;;
+            "tiktok")
+              echo "  - Video count"
+              echo "  - Views"
+              echo "  - Likes"
+              echo "  - Shares"
+              ;;
+          esac
+          echo ""
+        done
+        
+        echo "To get actual hashtag data:"
+        echo "1. Use platform-specific search APIs"
+        echo "2. Aggregate data across platforms"
+        echo "3. Track over time for trends"
+        echo "4. Compare with competitor hashtags"
+
+  - name: sentiment_analysis
+    description:
+      en: Analyze sentiment of social media comments/replies
+      zh: 分析社交媒体评论/回复的情绪
+    parameters:
+      platform:
+        type: string
+        enum: [twitter, instagram, facebook, linkedin, youtube]
+        description:
+          en: Social media platform
+          zh: 社交媒体平台
+        required: true
+      content_id:
+        type: string
+        description:
+          en: Content ID or URL to analyze comments
+          zh: 要分析评论的内容ID或URL
+        required: true
+      sample_size:
+        type: integer
+        description:
+          en: Number of comments to analyze
+          zh: 要分析的评论数量
+        default: 100
+    implementation:
+      type: shell
+      command: |
+        echo "Sentiment Analysis"
+        echo "=================="
+        echo "Platform: {{platform}}"
+        echo "Content: {{content_id}}"
+        echo "Sample size: {{sample_size}}"
+        echo ""
+        
+        # Simple sentiment analysis demo
+        python3 << 'EOF'
+        import random
+        
+        # Simulated sentiment analysis
+        sentiments = ["positive", "neutral", "negative"]
+        weights = [0.6, 0.3, 0.1]  # Assume mostly positive for demo
+        
+        results = random.choices(sentiments, weights=weights, k={{sample_size}})
+        
+        positive = results.count("positive")
+        neutral = results.count("neutral")
+        negative = results.count("negative")
+        
+        print(f"Analysis of {{sample_size}} comments:")
+        print(f"Positive: {positive} ({positive/{{sample_size}}*100:.1f}%)")
+        print(f"Neutral: {neutral} ({neutral/{{sample_size}}*100:.1f}%)")
+        print(f"Negative: {negative} ({negative/{{sample_size}}*100:.1f}%)")
+        print(f"Overall sentiment: {'Positive' if positive > negative else 'Negative' if negative > positive else 'Neutral'}")
+        EOF
+        
+        echo ""
+        echo "Note: For actual sentiment analysis:"
+        echo "1. Fetch comments using platform APIs"
+        echo "2. Use NLP libraries (NLTK, TextBlob, VADER)"
+        echo "3. Consider context and sarcasm"
+        echo "4. Account for platform-specific language"

@@ -1,0 +1,198 @@
+version: 1.1.0
+premium: true
+name: Dev.to Articles
+description:
+  en: Fetch trending articles from Dev.to, search articles, and get user publications.
+  zh: 从Dev.to获取热门文章，搜索文章，获取用户发布内容。
+tools:
+  - name: get_trending_articles
+    description:
+      en: Get trending articles from Dev.to
+      zh: 获取Dev.to热门文章
+    parameters:
+      limit:
+        type: integer
+        description:
+          en: Number of articles to return
+          zh: 返回文章数量
+        default: 20
+      tag:
+        type: string
+        description:
+          en: Filter by tag
+          zh: 按标签过滤
+        default: null
+      top:
+        type: integer
+        description:
+          en: Top articles from last N days (1-365)
+          zh: 最近N天的热门文章（1-365）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        url="https://dev.to/api/articles?per_page={{limit}}"
+        
+        if [ -n "{{tag}}" ] && [ "{{tag}}" != "null" ]; then
+          url="$url&tag={{tag}}"
+        fi
+        
+        if [ -n "{{top}}" ] && [ "{{top}}" != "null" ]; then
+          url="$url&top={{top}}"
+        else
+          url="$url&state=fresh"
+        fi
+        
+        curl -s "$url" | jq '.[] | {
+          title: .title,
+          url: .url,
+          description: .description,
+          published_at: .published_at,
+          tag_list: .tag_list,
+          reading_time_minutes: .reading_time_minutes,
+          positive_reactions_count: .positive_reactions_count,
+          comments_count: .comments_count,
+          user: {
+            name: .user.name,
+            username: .user.username,
+            profile_image: .user.profile_image
+          }
+        }'
+
+  - name: search_articles
+    description:
+      en: Search Dev.to articles by keyword
+      zh: 按关键词搜索Dev.to文章
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of results to return
+          zh: 返回结果数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        # Dev.to API doesn't have search, so we use their search endpoint
+        curl -s "https://dev.to/search/feed_content?per_page={{limit}}&page=0&search_fields={{query}}&sort_by=published_at&sort_direction=desc" | jq '.result | .[] | {
+          title: .title,
+          url: .url,
+          description: .description,
+          published_at: .readable_publish_date,
+          tag_list: .tag_list,
+          reading_time_minutes: .reading_time_minutes,
+          positive_reactions_count: .public_reactions_count,
+          comments_count: .comments_count,
+          user: {
+            name: .user.name,
+            username: .user.username
+          }
+        }'
+
+  - name: get_article_details
+    description:
+      en: Get detailed information about a Dev.to article
+      zh: 获取Dev.to文章的详细信息
+    parameters:
+      article_id:
+        type: string
+        description:
+          en: Dev.to article ID or URL
+          zh: Dev.to文章ID或URL
+        required: true
+    implementation:
+      type: shell
+      command: |
+        # Extract ID from URL if provided
+        article_id="{{article_id}}"
+        if [[ "$article_id" == *"dev.to"* ]]; then
+          article_id=$(echo "$article_id" | grep -oE '[0-9]+$')
+        fi
+        
+        curl -s "https://dev.to/api/articles/$article_id" | jq '{
+          title: .title,
+          url: .url,
+          description: .description,
+          body_markdown: .body_markdown[0:1000],
+          published_at: .published_at,
+          tag_list: .tag_list,
+          reading_time_minutes: .reading_time_minutes,
+          positive_reactions_count: .positive_reactions_count,
+          comments_count: .comments_count,
+          cover_image: .cover_image,
+          user: {
+            name: .user.name,
+            username: .user.username,
+            profile_image: .user.profile_image,
+            summary: .user.summary
+          },
+          organization: .organization,
+          flare_tag: .flare_tag
+        }'
+
+  - name: get_user_articles
+    description:
+      en: Get articles published by a Dev.to user
+      zh: 获取Dev.to用户发布的文章
+    parameters:
+      username:
+        type: string
+        description:
+          en: Dev.to username
+          zh: Dev.to用户名
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of articles to return
+          zh: 返回文章数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        # Get user ID first
+        user_id=$(curl -s "https://dev.to/api/users/by_url?url=https://dev.to/{{username}}" | jq '.id')
+        
+        if [ -z "$user_id" ] || [ "$user_id" = "null" ]; then
+          echo "User not found"
+          exit 1
+        fi
+        
+        curl -s "https://dev.to/api/articles?user_id=$user_id&per_page={{limit}}" | jq '.[] | {
+          title: .title,
+          url: .url,
+          description: .description,
+          published_at: .published_at,
+          tag_list: .tag_list,
+          reading_time_minutes: .reading_time_minutes,
+          positive_reactions_count: .positive_reactions_count,
+          comments_count: .comments_count
+        }'
+
+  - name: get_tags
+    description:
+      en: Get popular tags on Dev.to
+      zh: 获取Dev.to热门标签
+    parameters:
+      limit:
+        type: integer
+        description:
+          en: Number of tags to return
+          zh: 返回标签数量
+        default: 50
+    implementation:
+      type: shell
+      command: |
+        curl -s "https://dev.to/api/tags?per_page={{limit}}" | jq '.[] | {
+          name: .name,
+          bg_color_hex: .bg_color_hex,
+          text_color_hex: .text_color_hex,
+          short_summary: .short_summary,
+          short_name: .short_name
+        }'

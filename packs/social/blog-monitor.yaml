@@ -1,0 +1,283 @@
+version: 1.1.0
+premium: true
+name: Blog Monitor
+description:
+  en: Monitor blog updates, track RSS feeds, and get notifications for new posts.
+  zh: 监控博客更新，追踪RSS订阅源，获取新帖子通知。
+tools:
+  - name: monitor_blog
+    description:
+      en: Monitor a blog for new posts via RSS feed
+      zh: 通过RSS订阅源监控博客新帖子
+    parameters:
+      feed_url:
+        type: string
+        description:
+          en: Blog RSS feed URL
+          zh: 博客RSS订阅源URL
+        required: true
+      check_interval:
+        type: integer
+        description:
+          en: Check interval in minutes
+          zh: 检查间隔（分钟）
+        default: 60
+      output_file:
+        type: string
+        description:
+          en: File to save new posts
+          zh: 保存新帖子的文件
+        default: blog_monitor.log
+    implementation:
+      type: shell
+      command: |
+        echo "Starting blog monitor for: {{feed_url}}"
+        echo "Check interval: {{check_interval}} minutes"
+        echo "Output file: {{output_file}}"
+        echo ""
+        
+        # Get initial posts to establish baseline
+        echo "Fetching initial posts..."
+        curl -s "{{feed_url}}" | python3 << 'EOF'
+        import feedparser
+        import json
+        import sys
+        
+        feed = feedparser.parse(sys.stdin.read())
+        
+        print(f"Blog: {feed.feed.get('title', 'Unknown')}")
+        print(f"Total posts found: {len(feed.entries)}")
+        print("\nLatest posts:")
+        
+        for entry in feed.entries[:5]:
+            print(f"- {entry.get('title', 'No title')} ({entry.get('published', 'Unknown date')})")
+        EOF
+        
+        echo ""
+        echo "Creating monitor script..."
+        
+        # Create monitoring script
+        cat > /tmp/blog_monitor.sh << 'SCRIPT'
+        #!/bin/bash
+        last_check=$(date +%s)
+        
+        while true; do
+          echo "=== Checking at $(date) ===" >> {{output_file}}
+          
+          curl -s "{{feed_url}}" | python3 << 'PYEOF'
+          import feedparser
+          import json
+          import sys
+          import os
+          from datetime import datetime
+          
+          feed = feedparser.parse(sys.stdin.read())
+          
+          # Read last known posts if file exists
+          last_posts_file = "/tmp/blog_last_posts.txt"
+          last_posts = []
+          if os.path.exists(last_posts_file):
+              with open(last_posts_file, 'r') as f:
+                  last_posts = f.read().splitlines()
+          
+          # Check for new posts
+          new_posts = []
+          current_posts = []
+          
+          for entry in feed.entries[:20]:
+              post_id = entry.get('id', entry.get('link', ''))
+              current_posts.append(post_id)
+              
+              if post_id not in last_posts:
+                  new_posts.append({
+                      'title': entry.get('title', 'No title'),
+                      'url': entry.get('link', ''),
+                      'published': entry.get('published', ''),
+                      'author': entry.get('author', 'Unknown'),
+                      'summary': entry.get('summary', '')[:200]
+                  })
+          
+          # Save current posts for next check
+          with open(last_posts_file, 'w') as f:
+              f.write('\n'.join(current_posts))
+          
+          # Output new posts
+          if new_posts:
+              print(f"Found {len(new_posts)} new posts:")
+              for post in new_posts:
+                  print(json.dumps(post, ensure_ascii=False))
+          else:
+              print("No new posts found.")
+          PYEOF
+          
+          echo "" >> {{output_file}}
+          sleep $((${{check_interval}} * 60))
+        done
+        SCRIPT
+        
+        chmod +x /tmp/blog_monitor.sh
+        echo "Monitor script created: /tmp/blog_monitor.sh"
+        echo "Run with: nohup /tmp/blog_monitor.sh >> {{output_file}} 2>&1 &"
+
+  - name: get_latest_posts
+    description:
+      en: Get latest posts from a blog
+      zh: 获取博客最新帖子
+    parameters:
+      feed_url:
+        type: string
+        description:
+          en: Blog RSS feed URL
+          zh: 博客RSS订阅源URL
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of posts to return
+          zh: 返回帖子数量
+        default: 10
+    implementation:
+      type: shell
+      command: |
+        curl -s "{{feed_url}}" | python3 << 'EOF'
+        import feedparser
+        import json
+        import sys
+        
+        feed = feedparser.parse(sys.stdin.read())
+        
+        blog_info = {
+            'title': feed.feed.get('title', 'Unknown'),
+            'description': feed.feed.get('description', ''),
+            'link': feed.feed.get('link', ''),
+            'last_updated': feed.feed.get('updated', '')
+        }
+        
+        posts = []
+        for entry in feed.entries[:{{limit}}]:
+            posts.append({
+                'title': entry.get('title', 'No title'),
+                'url': entry.get('link', ''),
+                'published': entry.get('published', ''),
+                'author': entry.get('author', 'Unknown'),
+                'summary': entry.get('summary', '')[:300],
+                'categories': [tag.get('term', '') for tag in entry.get('tags', [])]
+            })
+        
+        result = {
+            'blog': blog_info,
+            'posts': posts,
+            'total_posts': len(posts)
+        }
+        
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: search_blog_posts
+    description:
+      en: Search posts within a blog by keyword
+      zh: 在博客中按关键词搜索帖子
+    parameters:
+      feed_url:
+        type: string
+        description:
+          en: Blog RSS feed URL
+          zh: 博客RSS订阅源URL
+        required: true
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of results to return
+          zh: 返回结果数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        curl -s "{{feed_url}}" | python3 << 'EOF'
+        import feedparser
+        import json
+        import sys
+        import re
+        
+        query = "{{query}}".lower()
+        feed = feedparser.parse(sys.stdin.read())
+        
+        matching_posts = []
+        for entry in feed.entries:
+            title = entry.get('title', '').lower()
+            summary = entry.get('summary', '').lower()
+            content = entry.get('content', [{}])[0].get('value', '').lower() if entry.get('content') else ''
+            
+            if query in title or query in summary or query in content:
+                matching_posts.append({
+                    'title': entry.get('title', 'No title'),
+                    'url': entry.get('link', ''),
+                    'published': entry.get('published', ''),
+                    'author': entry.get('author', 'Unknown'),
+                    'summary': entry.get('summary', '')[:300]
+                })
+        
+        result = {
+            'query': '{{query}}',
+            'total_matches': len(matching_posts),
+            'posts': matching_posts[:{{limit}}]
+        }
+        
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: get_blog_info
+    description:
+      en: Get information about a blog
+      zh: 获取博客信息
+    parameters:
+      feed_url:
+        type: string
+        description:
+          en: Blog RSS feed URL
+          zh: 博客RSS订阅源URL
+        required: true
+    implementation:
+      type: shell
+      command: |
+        curl -s "{{feed_url}}" | python3 << 'EOF'
+        import feedparser
+        import json
+        import sys
+        
+        feed = feedparser.parse(sys.stdin.read())
+        
+        # Get categories/tags
+        categories = set()
+        for entry in feed.entries[:50]:
+            for tag in entry.get('tags', []):
+                categories.add(tag.get('term', ''))
+        
+        # Get authors
+        authors = set()
+        for entry in feed.entries[:50]:
+            author = entry.get('author', '')
+            if author:
+                authors.add(author)
+        
+        info = {
+            'title': feed.feed.get('title', 'Unknown'),
+            'description': feed.feed.get('description', ''),
+            'link': feed.feed.get('link', ''),
+            'language': feed.feed.get('language', 'Unknown'),
+            'last_updated': feed.feed.get('updated', ''),
+            'generator': feed.feed.get('generator', 'Unknown'),
+            'total_posts': len(feed.entries),
+            'categories': list(categories)[:20],
+            'authors': list(authors)[:10],
+            'feed_url': '{{feed_url}}'
+        }
+        
+        print(json.dumps(info, indent=2, ensure_ascii=False))
+        EOF

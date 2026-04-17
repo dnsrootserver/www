@@ -1,0 +1,190 @@
+version: 1.1.0
+premium: true
+name: Server Monitor
+description:
+  en: Monitor server health including CPU, memory, disk, network, processes, and system alerts.
+  zh: 监控服务器健康状况，包括CPU、内存、磁盘、网络、进程和系统警报。
+triggers:
+  en:
+    - "server monitor"
+    - "server health"
+    - "check server"
+    - "system health"
+    - "monitor server"
+  zh:
+    - "服务器监控"
+    - "服务器健康"
+    - "检查服务器"
+    - "系统健康"
+    - "监控服务器"
+tools:
+  - name: system_overview
+    description:
+      en: Get comprehensive system overview (uptime, load, users)
+      zh: 获取全面的系统概览（正常运行时间、负载、用户）
+    parameters:
+      detailed:
+        type: boolean
+        description:
+          en: Show detailed system information
+          zh: 显示详细的系统信息
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== System Overview ==="
+        echo "Hostname: $(hostname)"
+        echo "Uptime: $(uptime)"
+        echo "Kernel: $(uname -r)"
+        echo "Users: $(who | wc -l) logged in"
+        echo ""
+        echo "=== Load Average ==="
+        cat /proc/loadavg 2>/dev/null || uptime | awk -F'load average:' '{print $2}'
+        echo ""
+        if [ "{{detailed}}" = "true" ]; then
+          echo "=== Memory Info ==="
+          free -h 2>/dev/null || vm_stat 2>/dev/null
+          echo ""
+          echo "=== CPU Info ==="
+          lscpu 2>/dev/null | grep -E "^(CPU\(s\)|Model name|CPU MHz)" || sysctl -n machdep.cpu.brand_string 2>/dev/null
+        fi
+  - name: cpu_monitor
+    description:
+      en: Monitor CPU usage and identify top CPU-consuming processes
+      zh: 监控CPU使用率并识别占用CPU最多的进程
+    parameters:
+      top_n:
+        type: integer
+        description:
+          en: Number of top processes to show
+          zh: 显示的顶部进程数量
+        default: 10
+    implementation:
+      type: shell
+      command: |
+        echo "=== CPU Usage ==="
+        top -l 1 -n 0 2>/dev/null | grep -E "^(CPU|PhysMem)" || top -bn1 | head -5
+        echo ""
+        echo "=== Top {{top_n}} CPU Processes ==="
+        ps aux --sort=-%cpu 2>/dev/null | head -$(($top_n + 1)) || ps aux | head -$(($top_n + 1))
+  - name: memory_monitor
+    description:
+      en: Monitor memory usage and identify memory-hogging processes
+      zh: 监控内存使用情况并识别占用内存最多的进程
+    parameters:
+      top_n:
+        type: integer
+        description:
+          en: Number of top processes to show
+          zh: 显示的顶部进程数量
+        default: 10
+    implementation:
+      type: shell
+      command: |
+        echo "=== Memory Usage ==="
+        free -h 2>/dev/null || vm_stat 2>/dev/null | perl -ne '/page size of (\d+)/ and $size=$1; /Pages\s+active[^:]*:\s+(\d+)/ and printf("Active: %.1fM\n", $1*$size/1048576)'
+        echo ""
+        echo "=== Top {{top_n}} Memory Processes ==="
+        ps aux --sort=-%mem 2>/dev/null | head -$(($top_n + 1)) || ps aux | head -$(($top_n + 1))
+  - name: disk_monitor
+    description:
+      en: Monitor disk usage and inode usage
+      zh: 监控磁盘使用情况和inode使用情况
+    parameters:
+      threshold:
+        type: integer
+        description:
+          en: Alert threshold percentage (default 90)
+          zh: 警报阈值百分比（默认90）
+        default: 90
+    implementation:
+      type: shell
+      command: |
+        echo "=== Disk Usage ==="
+        df -h 2>/dev/null | grep -v tmpfs | awk -v thresh={{threshold}} '
+          NR==1 {print; next}
+          {
+            gsub(/%/,"",$5)
+            if ($5+0 >= thresh) {
+              print $0 " ⚠️  ALERT: " $5 "% used"
+            } else {
+              print $0
+            }
+          }'
+        echo ""
+        echo "=== Inode Usage ==="
+        df -i 2>/dev/null | grep -v tmpfs | head -10
+        echo ""
+        echo "=== Largest Directories ==="
+        du -sh /* 2>/dev/null | sort -rh | head -10
+  - name: network_monitor
+    description:
+      en: Monitor network connections, listening ports, and bandwidth
+      zh: 监控网络连接、监听端口和带宽
+    parameters:
+      show_established:
+        type: boolean
+        description:
+          en: Show established connections
+          zh: 显示已建立的连接
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Listening Ports ==="
+        netstat -tuln 2>/dev/null | grep LISTEN | head -20 || ss -tuln | head -20
+        echo ""
+        if [ "{{show_established}}" = "true" ]; then
+          echo "=== Established Connections ==="
+          netstat -tun 2>/dev/null | grep ESTABLISHED | head -20 || ss -tun | grep ESTAB | head -20
+          echo ""
+        fi
+        echo "=== Network Interfaces ==="
+        ifconfig 2>/dev/null | grep -E "^(eth|wlan|en|lo)" -A 1 || ip addr show | grep -E "^[0-9]+:" -A 1
+  - name: process_monitor
+    description:
+      en: Monitor running processes and identify zombie/defunct processes
+      zh: 监控运行中的进程并识别僵尸进程
+    parameters:
+      filter:
+        type: string
+        description:
+          en: Filter processes by name (optional)
+          zh: 按名称过滤进程（可选）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        echo "=== Process Summary ==="
+        echo "Total processes: $(ps aux 2>/dev/null | wc -l)"
+        echo "Zombie processes: $(ps aux 2>/dev/null | awk '$8=="Z" {count++} END {print count+0}')"
+        echo ""
+        if [ -n "{{filter}}" ] && [ "{{filter}}" != "null" ]; then
+          echo "=== Processes matching '{{filter}}' ==="
+          ps aux | grep -i "{{filter}}" | grep -v grep
+        else
+          echo "=== Recent Processes ==="
+          ps aux --sort=-start_time 2>/dev/null | head -15 || ps aux | head -15
+        fi
+  - name: system_logs
+    description:
+      en: Check recent system logs and errors
+      zh: 检查最近的系统日志和错误
+    parameters:
+      lines:
+        type: integer
+        description:
+          en: Number of log lines to show
+          zh: 显示的日志行数
+        default: 30
+    implementation:
+      type: shell
+      command: |
+        echo "=== Recent System Logs ==="
+        if [ -f /var/log/syslog ]; then
+          tail -{{lines}} /var/log/syslog | grep -i "error\|warn\|fail" || tail -{{lines}} /var/log/syslog
+        elif [ -f /var/log/messages ]; then
+          tail -{{lines}} /var/log/messages | grep -i "error\|warn\|fail" || tail -{{lines}} /var/log/messages
+        else
+          journalctl -n {{lines}} --no-pager 2>/dev/null || dmesg | tail -{{lines}}
+        fi

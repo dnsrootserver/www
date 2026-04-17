@@ -1,0 +1,72 @@
+name: morse-code
+version: "1.1.0"
+description: "Encode text to Morse code or decode Morse code to text"
+description_zh: "将文本编码为摩尔斯电码或将摩尔斯电码解码为文本"
+author: agentforge
+category: utility
+triggers: ["morse code", "encode morse", "decode morse", "morse encode", "morse decode"]
+triggers_zh: ["摩尔斯电码", "编码摩尔斯", "解码摩尔斯", "摩尔斯编码", "摩尔斯解码"]
+tags: [text, utility, encoding]
+steps:
+  - tool: python
+    params:
+      code: |
+        # Morse code dictionary
+        MORSE_CODE = {
+            'A': '.-', 'B': '-...', 'C': '-.-.', 'D': '-..', 'E': '.', 'F': '..-.',
+            'G': '--.', 'H': '....', 'I': '..', 'J': '.---', 'K': '-.-', 'L': '.-..',
+            'M': '--', 'N': '-.', 'O': '---', 'P': '.--.', 'Q': '--.-', 'R': '.-.',
+            'S': '...', 'T': '-', 'U': '..-', 'V': '...-', 'W': '.--', 'X': '-..-',
+            'Y': '-.--', 'Z': '--..', '0': '-----', '1': '.----', '2': '..---',
+            '3': '...--', '4': '....-', '5': '.....', '6': '-....', '7': '--...',
+            '8': '---..', '9': '----.', '.': '.-.-.-', ',': '--..--', '?': '..--..',
+            "'": '.----.', '!': '-.-.--', '/': '-..-.', '(': '-.--.', ')': '-.--.-',
+            '&': '.-...', ':': '---...', ';': '-.-.-.', '=': '-...-', '+': '.-.-.',
+            '-': '-....-', '_': '..--.-', '"': '.-..-.', '$': '...-..-', '@': '.--.-.'
+        }
+        
+        REVERSE_MORSE = {v: k for k, v in MORSE_CODE.items()}
+        
+        text = "{{ input }}".strip()
+        if not text:
+            text = "HELLO WORLD"
+        
+        # Determine if it's Morse code (contains dots and dashes)
+        is_morse = all(c in '.- /' for c in text) and ('.' in text or '-' in text)
+        
+        if is_morse:
+            # Decode Morse to text
+            words = text.split(' / ')
+            decoded_words = []
+            for word in words:
+                letters = word.split()
+                decoded_letters = []
+                for letter in letters:
+                    if letter in REVERSE_MORSE:
+                        decoded_letters.append(REVERSE_MORSE[letter])
+                    else:
+                        decoded_letters.append('?')
+                decoded_words.append(''.join(decoded_letters))
+            result = f"Morse Code: {text}\nDecoded: {' '.join(decoded_words)}"
+        else:
+            # Encode text to Morse
+            text = text.upper()
+            encoded_words = []
+            for word in text.split():
+                encoded_letters = []
+                for char in word:
+                    if char in MORSE_CODE:
+                        encoded_letters.append(MORSE_CODE[char])
+                    else:
+                        encoded_letters.append(char)
+                encoded_words.append(' '.join(encoded_letters))
+            encoded = ' / '.join(encoded_words)
+            result = f"Original: {text}\nMorse Code: {encoded}"
+        
+        print(result)
+      var: result
+  - tool: output
+    params:
+      message: "{{ result }}"
+      format: panel
+      title: "Morse Code Encoder/Decoder"

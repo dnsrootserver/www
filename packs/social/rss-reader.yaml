@@ -1,0 +1,152 @@
+version: 1.1.0
+premium: true
+name: RSS Reader
+description:
+  en: Read and parse RSS/Atom feeds, extract articles, and monitor feed updates.
+  zh: 读取和解析RSS/Atom订阅源，提取文章，监控订阅源更新。
+tools:
+  - name: fetch_feed
+    description:
+      en: Fetch and parse an RSS/Atom feed URL
+      zh: 获取并解析RSS/Atom订阅源URL
+    parameters:
+      url:
+        type: string
+        description:
+          en: RSS/Atom feed URL
+          zh: RSS/Atom订阅源URL
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Maximum number of items to return
+          zh: 返回项目最大数量
+        default: 20
+      format:
+        type: string
+        enum: [full, summary, titles]
+        description:
+          en: Output format (full details, summary, or just titles)
+          zh: 输出格式（完整详情、摘要或仅标题）
+        default: summary
+    implementation:
+      type: shell
+      command: |
+        # Install feedparser if not available
+        python3 -c "import feedparser" 2>/dev/null || pip3 install feedparser -q
+        
+        python3 << 'EOF'
+        import feedparser
+        import json
+        import sys
+        
+        url = "{{url}}"
+        limit = {{limit}}
+        format_type = "{{format}}"
+        
+        feed = feedparser.parse(url)
+        
+        if feed.bozo:
+            print(f"Error parsing feed: {feed.bozo_exception}")
+            sys.exit(1)
+        
+        items = []
+        for entry in feed.entries[:limit]:
+            if format_type == "titles":
+                items.append({"title": entry.get("title", "No title")})
+            elif format_type == "summary":
+                items.append({
+                    "title": entry.get("title", "No title"),
+                    "link": entry.get("link", ""),
+                    "published": entry.get("published", ""),
+                    "summary": entry.get("summary", "")[:300]
+                })
+            else:  # full
+                items.append({
+                    "title": entry.get("title", "No title"),
+                    "link": entry.get("link", ""),
+                    "published": entry.get("published", ""),
+                    "author": entry.get("author", ""),
+                    "summary": entry.get("summary", ""),
+                    "content": entry.get("content", [{}])[0].get("value", "") if entry.get("content") else ""
+                })
+        
+        print(json.dumps(items, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: check_feed_updates
+    description:
+      en: Check for new items in a feed since a given date
+      zh: 检查订阅源中给定日期后的新项目
+    parameters:
+      url:
+        type: string
+        description:
+          en: RSS/Atom feed URL
+          zh: RSS/Atom订阅源URL
+        required: true
+      since_date:
+        type: string
+        description:
+          en: Check for items after this date (ISO format: YYYY-MM-DD)
+          zh: 检查此日期后的项目（ISO格式：YYYY-MM-DD）
+        required: true
+    implementation:
+      type: shell
+      command: |
+        python3 << 'EOF'
+        import feedparser
+        import json
+        from datetime import datetime
+        
+        url = "{{url}}"
+        since_date = datetime.strptime("{{since_date}}", "%Y-%m-%d")
+        
+        feed = feedparser.parse(url)
+        
+        new_items = []
+        for entry in feed.entries:
+            published = entry.get("published_parsed")
+            if published:
+                pub_date = datetime(*published[:6])
+                if pub_date > since_date:
+                    new_items.append({
+                        "title": entry.get("title", "No title"),
+                        "link": entry.get("link", ""),
+                        "published": entry.get("published", ""),
+                        "summary": entry.get("summary", "")[:200]
+                    })
+        
+        print(f"Found {len(new_items)} new items since {{since_date}}")
+        print(json.dumps(new_items, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: validate_feed
+    description:
+      en: Validate if a URL is a valid RSS/Atom feed
+      zh: 验证URL是否为有效的RSS/Atom订阅源
+    parameters:
+      url:
+        type: string
+        description:
+          en: URL to validate
+          zh: 要验证的URL
+        required: true
+    implementation:
+      type: shell
+      command: |
+        python3 << 'EOF'
+        import feedparser
+        
+        url = "{{url}}"
+        feed = feedparser.parse(url)
+        
+        if feed.bozo:
+            print(f"Invalid feed: {feed.bozo_exception}")
+            print("Valid: false")
+        else:
+            print(f"Valid feed: {feed.feed.get('title', 'Unknown')}")
+            print(f"Feed type: {feed.version}")
+            print(f"Number of entries: {len(feed.entries)}")
+            print("Valid: true")
+        EOF

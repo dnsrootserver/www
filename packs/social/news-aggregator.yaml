@@ -1,0 +1,265 @@
+version: 1.1.0
+premium: true
+name: News Aggregator
+description:
+  en: Aggregate news from multiple sources, search by topic, and get top headlines.
+  zh: 从多个来源聚合新闻，按主题搜索，获取头条新闻。
+tools:
+  - name: get_top_headlines
+    description:
+      en: Get top headlines from news sources
+      zh: 获取新闻来源的头条新闻
+    parameters:
+      country:
+        type: string
+        description:
+          en: Country code (us, cn, gb, etc.)
+          zh: 国家代码（us、cn、gb等）
+        default: us
+      category:
+        type: string
+        enum: [business, entertainment, general, health, science, sports, technology]
+        description:
+          en: News category
+          zh: 新闻类别
+        default: general
+      limit:
+        type: integer
+        description:
+          en: Number of articles to return
+          zh: 返回文章数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        # Using NewsAPI (requires API key) or alternative sources
+        echo "Top Headlines - {{category}} ({{country}})"
+        echo "=========================================="
+        
+        # Try NewsAPI if key is available
+        if [ -n "$NEWS_API_KEY" ]; then
+          curl -s "https://newsapi.org/v2/top-headlines?country={{country}}&category={{category}}&pageSize={{limit}}&apiKey=$NEWS_API_KEY" | jq '.articles[] | {
+            title: .title,
+            description: .description,
+            url: .url,
+            urlToImage: .urlToImage,
+            publishedAt: .publishedAt,
+            source: .source.name,
+            author: .author
+          }'
+        else
+          # Fallback to RSS feeds
+          echo "Using RSS feeds (NewsAPI key not set)"
+          case "{{category}}" in
+            "technology")
+              curl -s "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml" | python3 -c "
+          import feedparser, json, sys
+          feed = feedparser.parse(sys.stdin.read())
+          for entry in feed.entries[:{{limit}}]:
+              print(json.dumps({'title': entry.title, 'url': entry.link, 'published': entry.published, 'source': 'NY Times Tech'}))
+          "
+              ;;
+            "business")
+              curl -s "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml" | python3 -c "
+          import feedparser, json, sys
+          feed = feedparser.parse(sys.stdin.read())
+          for entry in feed.entries[:{{limit}}]:
+              print(json.dumps({'title': entry.title, 'url': entry.link, 'published': entry.published, 'source': 'NY Times Business'}))
+          "
+              ;;
+            *)
+              curl -s "https://rss.nytimes.com/services/xml/rss/nyt/World.xml" | python3 -c "
+          import feedparser, json, sys
+          feed = feedparser.parse(sys.stdin.read())
+          for entry in feed.entries[:{{limit}}]:
+              print(json.dumps({'title': entry.title, 'url': entry.link, 'published': entry.published, 'source': 'NY Times World'}))
+          "
+              ;;
+          esac
+        fi
+
+  - name: search_news
+    description:
+      en: Search news articles by keyword
+      zh: 按关键词搜索新闻文章
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      from_date:
+        type: string
+        description:
+          en: Start date (YYYY-MM-DD format)
+          zh: 开始日期（YYYY-MM-DD格式）
+        default: null
+      to_date:
+        type: string
+        description:
+          en: End date (YYYY-MM-DD format)
+          zh: 结束日期（YYYY-MM-DD格式）
+        default: null
+      language:
+        type: string
+        description:
+          en: Language code (en, zh, es, etc.)
+          zh: 语言代码（en、zh、es等）
+        default: en
+      sort_by:
+        type: string
+        enum: [relevancy, popularity, publishedAt]
+        description:
+          en: Sort results by
+          zh: 结果排序方式
+        default: relevancy
+      limit:
+        type: integer
+        description:
+          en: Number of results to return
+          zh: 返回结果数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        echo "Searching news for: {{query}}"
+        
+        # Build date parameters if provided
+        date_params=""
+        if [ -n "{{from_date}}" ] && [ "{{from_date}}" != "null" ]; then
+          date_params="$date_params&from={{from_date}}"
+        fi
+        if [ -n "{{to_date}}" ] && [ "{{to_date}}" != "null" ]; then
+          date_params="$date_params&to={{to_date}}"
+        fi
+        
+        # Try NewsAPI if key is available
+        if [ -n "$NEWS_API_KEY" ]; then
+          curl -s "https://newsapi.org/v2/everything?q={{query}}&language={{language}}&sortBy={{sort_by}}&pageSize={{limit}}$date_params&apiKey=$NEWS_API_KEY" | jq '.articles[] | {
+            title: .title,
+            description: .description,
+            url: .url,
+            urlToImage: .urlToImage,
+            publishedAt: .publishedAt,
+            source: .source.name,
+            author: .author,
+            content: .content
+          }'
+        else
+          # Fallback to Google News RSS
+          query_encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('{{query}}'))")
+          curl -s "https://news.google.com/rss/search?q=$query_encoded&hl={{language}}" | python3 -c "
+          import feedparser, json, sys
+          feed = feedparser.parse(sys.stdin.read())
+          for entry in feed.entries[:{{limit}}]:
+              print(json.dumps({'title': entry.title, 'url': entry.link, 'published': entry.published, 'source': 'Google News'}))
+          "
+        fi
+
+  - name: get_sources
+    description:
+      en: Get available news sources
+      zh: 获取可用的新闻来源
+    parameters:
+      language:
+        type: string
+        description:
+          en: Language filter
+          zh: 语言过滤器
+        default: en
+      country:
+        type: string
+        description:
+          en: Country filter
+          zh: 国家过滤器
+        default: null
+    implementation:
+      type: shell
+      command: |
+        if [ -n "$NEWS_API_KEY" ]; then
+          params="language={{language}}"
+          if [ -n "{{country}}" ] && [ "{{country}}" != "null" ]; then
+            params="$params&country={{country}}"
+          fi
+          curl -s "https://newsapi.org/v2/top-headlines/sources?$params&apiKey=$NEWS_API_KEY" | jq '.sources[] | {
+            id: .id,
+            name: .name,
+            description: .description,
+            url: .url,
+            category: .category,
+            language: .language,
+            country: .country
+          }'
+        else
+          echo "Popular News Sources (RSS):"
+          echo "1. BBC News - https://feeds.bbci.co.uk/news/rss.xml"
+          echo "2. CNN - http://rss.cnn.com/rss/edition.rss"
+          echo "3. NY Times - https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
+          echo "4. Reuters - http://feeds.reuters.com/reuters/topNews"
+          echo "5. TechCrunch - https://techcrunch.com/feed/"
+          echo "6. Hacker News - https://hnrss.org/frontpage"
+          echo "7. Reddit - https://www.reddit.com/r/news/.rss"
+          echo "8. Google News - https://news.google.com/rss"
+          echo ""
+          echo "Set NEWS_API_KEY for full source listing."
+        fi
+
+  - name: monitor_topic
+    description:
+      en: Monitor news about a specific topic over time
+      zh: 监控特定主题的新闻随时间变化
+    parameters:
+      topic:
+        type: string
+        description:
+          en: Topic to monitor
+          zh: 要监控的主题
+        required: true
+      interval_hours:
+        type: integer
+        description:
+          en: Check interval in hours
+          zh: 检查间隔（小时）
+        default: 24
+      output_file:
+        type: string
+        description:
+          en: File to save results
+          zh: 保存结果的文件
+        default: news_monitor.log
+    implementation:
+      type: shell
+      command: |
+        echo "Starting news monitoring for: {{topic}}"
+        echo "Interval: {{interval_hours}} hours"
+        echo "Output: {{output_file}}"
+        echo ""
+        
+        # Create monitoring script
+        cat > /tmp/news_monitor.sh << 'EOF'
+        #!/bin/bash
+        while true; do
+          echo "=== $(date) ===" >> {{output_file}}
+          echo "Checking news for: {{topic}}" >> {{output_file}}
+          
+          if [ -n "$NEWS_API_KEY" ]; then
+            curl -s "https://newsapi.org/v2/everything?q={{topic}}&pageSize=5&sortBy=publishedAt&apiKey=$NEWS_API_KEY" | jq '.articles[] | {title: .title, url: .url, publishedAt: .publishedAt}' >> {{output_file}} 2>/dev/null
+          else
+            query_encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('{{topic}}'))")
+            curl -s "https://news.google.com/rss/search?q=$query_encoded" | python3 -c "
+            import feedparser, json, sys
+            feed = feedparser.parse(sys.stdin.read())
+            for entry in feed.entries[:5]:
+                print(json.dumps({'title': entry.title, 'url': entry.link, 'published': entry.published}))
+            " >> {{output_file}} 2>/dev/null
+          fi
+          
+          echo "" >> {{output_file}}
+          sleep $((${{interval_hours}} * 3600))
+        done
+        EOF
+        
+        chmod +x /tmp/news_monitor.sh
+        echo "Monitor script created: /tmp/news_monitor.sh"
+        echo "Run in background with: nohup /tmp/news_monitor.sh &"

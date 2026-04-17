@@ -1,0 +1,99 @@
+version: 1.1.0
+premium: true
+name: SQL Query Helper
+description:
+  en: Execute SQL queries on CSV/JSON data using SQLite, import/export data.
+  zh: 使用SQLite在CSV/JSON数据上执行SQL查询，导入/导出数据。
+tools:
+  - name: query_csv
+    description:
+      en: Run SQL query on CSV file(s)
+      zh: 在CSV文件上运行SQL查询
+    parameters:
+      csv_files:
+        type: array
+        items:
+          type: string
+        description:
+          en: List of CSV file paths (table names derived from filenames)
+          zh: CSV文件路径列表（表名从文件名派生）
+        required: true
+      query:
+        type: string
+        description:
+          en: SQL query to execute (use table names without .csv extension)
+          zh: 要执行的SQL查询（表名不带.csv扩展名）
+        required: true
+      output_format:
+        type: string
+        enum: [table, csv, json]
+        description:
+          en: Output format
+          zh: 输出格式
+        default: table
+    implementation:
+      type: shell
+      command: |
+        # Create temporary SQLite database
+        db_file=$(mktemp /tmp/sqlite_XXXXXX.db)
+        # Import CSV files
+        for csv_file in {{csv_files}}; do
+          if [ ! -f "$csv_file" ]; then
+            echo "Error: File not found: $csv_file"
+            rm -f "$db_file"
+            exit 1
+          fi
+          table_name=$(basename "$csv_file" .csv)
+          sqlite3 "$db_file" ".mode csv" ".import '$csv_file' '$table_name'"
+        done
+        # Execute query based on output format
+        case "{{output_format}}" in
+          "table")
+            sqlite3 -header -column "$db_file" "{{query}}"
+            ;;
+          "csv")
+            sqlite3 -header -csv "$db_file" "{{query}}"
+            ;;
+          "json")
+            sqlite3 -json "$db_file" "{{query}}"
+            ;;
+        esac
+        # Cleanup
+        rm -f "$db_file"
+  - name: import_json_to_sqlite
+    description:
+      en: Import JSON data into SQLite and query
+      zh: 将JSON数据导入SQLite并查询
+    parameters:
+      json_file:
+        type: string
+        description:
+          en: Path to JSON file (array of objects)
+          zh: JSON文件路径（对象数组）
+        required: true
+      table_name:
+        type: string
+        description:
+          en: Table name to create
+          zh: 要创建的表名
+        required: true
+      query:
+        type: string
+        description:
+          en: SQL query to run after import
+          zh: 导入后运行的SQL查询
+        default: "SELECT * FROM {table_name} LIMIT 10"
+    implementation:
+      type: shell
+      command: |
+        if ! command -v jq &> /dev/null; then
+          echo "Error: jq required"
+          exit 1
+        fi
+        db_file=$(mktemp /tmp/sqlite_XXXXXX.db)
+        # Convert JSON to CSV and import
+        jq -r '(.[0] | keys_unsorted) as $keys | $keys, (.[] | [.[$keys[]]]) | @csv' "{{json_file}}" > /tmp/converted.csv
+        sqlite3 "$db_file" ".mode csv" ".import /tmp/converted.csv '{{table_name}}'"
+        # Run query
+        sqlite3 -header -column "$db_file" "{{query}}"
+        rm -f "$db_file" /tmp/converted.csv

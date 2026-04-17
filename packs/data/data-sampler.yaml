@@ -1,0 +1,210 @@
+version: 1.1.0
+premium: true
+name: Data Sampler
+description:
+  en: Sample and subset data from CSV, JSON, or other sources. Random, stratified, and systematic sampling.
+  zh: 从CSV、JSON或其他来源采样和子集数据。随机、分层和系统采样。
+tools:
+  - name: sample_csv
+    description:
+      en: Sample rows from CSV file
+      zh: 从CSV文件采样行
+    parameters:
+      file_path:
+        type: string
+        description:
+          en: Path to CSV file
+          zh: CSV文件路径
+        required: true
+      sample_type:
+        type: string
+        enum: [random, head, tail, systematic, stratified]
+        description:
+          en: Sampling method
+          zh: 采样方法
+        default: random
+      sample_size:
+        type: integer
+        description:
+          en: Number of rows to sample (or percentage if < 1)
+          zh: 采样行数（或百分比，如果小于1）
+        default: 100
+      stratify_column:
+        type: string
+        description:
+          en: Column to stratify by (for stratified sampling)
+          zh: 分层依据的列（用于分层采样）
+        default: null
+      output_file:
+        type: string
+        description:
+          en: Output file path
+          zh: 输出文件路径
+        default: "sample.csv"
+      seed:
+        type: integer
+        description:
+          en: Random seed for reproducibility
+          zh: 随机种子以保证可重复性
+        default: null
+    implementation:
+      type: shell
+      command: |
+        python3 << EOF
+        import csv
+        import random
+        import sys
+        file_path = "{{file_path}}"
+        sample_type = "{{sample_type}}"
+        sample_size = {{sample_size}}
+        output_file = "{{output_file}}"
+        seed = {{seed}} if "{{seed}}" != "null" else None
+        if seed is not None:
+            random.seed(seed)
+        # Read CSV
+        with open(file_path) as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames
+            rows = list(reader)
+        total = len(rows)
+        # Determine sample size
+        if sample_size < 1:
+            n = int(total * sample_size)
+        else:
+            n = min(sample_size, total)
+        # Sample based on type
+        if sample_type == "random":
+            sampled = random.sample(rows, n)
+        elif sample_type == "head":
+            sampled = rows[:n]
+        elif sample_type == "tail":
+            sampled = rows[-n:]
+        elif sample_type == "systematic":
+            step = max(1, total // n)
+            sampled = rows[::step][:n]
+        elif sample_type == "stratified":
+            col = "{{stratify_column}}"
+            if col == "null" or not col:
+                print("Error: stratify_column required for stratified sampling")
+                sys.exit(1)
+            groups = {}
+            for row in rows:
+                key = row.get(col, 'unknown')
+                groups.setdefault(key, []).append(row)
+            sampled = []
+            per_group = max(1, n // len(groups))
+            for group_rows in groups.values():
+                sampled.extend(random.sample(group_rows, min(per_group, len(group_rows))))
+            sampled = sampled[:n]
+        # Write output
+        with open(output_file, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(sampled)
+        print(f"Sampled {len(sampled)} rows from {total} total")
+        print(f"Output: {output_file}")
+        EOF
+  - name: subset_columns
+    description:
+      en: Select specific columns from CSV
+      zh: 从CSV中选择特定列
+    parameters:
+      file_path:
+        type: string
+        description:
+          en: Path to CSV file
+          zh: CSV文件路径
+        required: true
+      columns:
+        type: array
+        items:
+          type: string
+        description:
+          en: List of column names to keep
+          zh: 要保留的列名列表
+        required: true
+      output_file:
+        type: string
+        description:
+          en: Output file path
+          zh: 输出文件路径
+        default: "subset.csv"
+    implementation:
+      type: shell
+      command: |
+        python3 << EOF
+        import csv
+        file_path = "{{file_path}}"
+        columns = [{{columns}}]
+        output_file = "{{output_file}}"
+        with open(file_path) as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames
+            rows = list(reader)
+        # Validate columns
+        missing = [c for c in columns if c not in headers]
+        if missing:
+            print(f"Warning: Columns not found: {missing}")
+            columns = [c for c in columns if c in headers]
+        # Write subset
+        with open(output_file, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=columns, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"Extracted {len(columns)} columns: {', '.join(columns)}")
+        print(f"Output: {output_file}")
+        EOF
+  - name: filter_rows
+    description:
+      en: Filter rows based on conditions
+      zh: 根据条件过滤行
+    parameters:
+      file_path:
+        type: string
+        description:
+          en: Path to CSV file
+          zh: CSV文件路径
+        required: true
+      condition:
+        type: string
+        description:
+          en: Filter condition (e.g., "age > 30", "status == 'active'")
+          zh: 过滤条件（例如："age > 30", "status == 'active'"）
+        required: true
+      output_file:
+        type: string
+        description:
+          en: Output file path
+          zh: 输出文件路径
+        default: "filtered.csv"
+    implementation:
+      type: shell
+      command: |
+        python3 << EOF
+        import csv
+        import sys
+        file_path = "{{file_path}}"
+        condition = """{{condition}}"""
+        output_file = "{{output_file}}"
+        with open(file_path) as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames
+            rows = list(reader)
+        # Apply filter
+        filtered = []
+        for row in rows:
+            try:
+                # Create local variables from row
+                locals().update(row)
+                if eval(condition):
+                    filtered.append(row)
+            except Exception as e:
+                print(f"Error evaluating condition on row: {e}", file=sys.stderr)
+                continue
+        with open(output_file, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(filtered)
+        print(f"Filtered: {len(filtered)} rows match condition (from {len(rows)} total)")
+        print(f"Output: {output_file}")
+        EOF

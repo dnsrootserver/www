@@ -1,0 +1,103 @@
+version: 1.1.0
+premium: true
+name: Web Scraper
+description:
+  en: Scrape web pages for data extraction using CSS selectors, regex, or XPath-like patterns.
+  zh: 使用CSS选择器、正则表达式或类似XPath的模式抓取网页以提取数据。
+tools:
+  - name: scrape_url
+    description:
+      en: Scrape a URL and extract data
+      zh: 抓取URL并提取数据
+    parameters:
+      url:
+        type: string
+        description:
+          en: URL to scrape
+          zh: 要抓取的URL
+        required: true
+      selector:
+        type: string
+        description:
+          en: CSS selector or regex pattern (prefix with regex:)
+          zh: CSS选择器或正则表达式模式（regex:前缀）
+        required: true
+      output_format:
+        type: string
+        enum: [text, html, links, images]
+        description:
+          en: Output format
+          zh: 输出格式
+        default: text
+      user_agent:
+        type: string
+        description:
+          en: Custom User-Agent string
+          zh: 自定义User-Agent字符串
+        default: "Mozilla/5.0 (AgentForge Scraper)"
+    implementation:
+      type: shell
+      command: |
+        # Fetch the page
+        html=$(curl -s -A "{{user_agent}}" "{{url}}")
+        if [ -z "$html" ]; then
+          echo "Error: Failed to fetch URL"
+          exit 1
+        fi
+        # Process based on selector type and output format
+        if [[ "{{selector}}" == regex:* ]]; then
+          pattern="{{selector:6}}"
+          echo "$html" | grep -oP "$pattern"
+        else
+          # Simple CSS selector simulation using grep/sed/awk
+          case "{{output_format}}" in
+            "text")
+              # Remove HTML tags and extract text
+              echo "$html" | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d'
+              ;;
+            "html")
+              # Extract by selector (basic tag matching)
+              tag=$(echo "{{selector}}" | sed 's/^\.//' | sed 's/^#//')
+              echo "$html" | grep -oP "<${tag}[^>]*>.*?</${tag}>" | head -20
+              ;;
+            "links")
+              # Extract all links
+              echo "$html" | grep -oP 'href="[^"]*"' | sed 's/href="//' | sed 's/"//'
+              ;;
+            "images")
+              # Extract all image sources
+              echo "$html" | grep -oP 'src="[^"]*\.(jpg|jpeg|png|gif|webp)[^"]*"' | sed 's/src="//' | sed 's/"//'
+              ;;
+          esac
+        fi
+  - name: extract_table
+    description:
+      en: Extract HTML tables as CSV
+      zh: 将HTML表格提取为CSV
+    parameters:
+      url:
+        type: string
+        description:
+          en: URL containing tables
+          zh: 包含表格的URL
+        required: true
+      table_index:
+        type: integer
+        description:
+          en: Which table to extract (0-based index)
+          zh: 要提取的表格索引（从0开始）
+        default: 0
+    implementation:
+      type: shell
+      command: |
+        html=$(curl -s "{{url}}")
+        # Extract table between <table> tags
+        table=$(echo "$html" | tr '\n' ' ' | grep -oP '<table[^>]*>.*?</table>' | sed -n '{{table_index}}p')
+        if [ -z "$table" ]; then
+          echo "Error: No table found at index {{table_index}}"
+          exit 1
+        fi
+        # Extract rows and cells
+        echo "$table" | grep -oP '<tr[^>]*>.*?</tr>' | while read -r row; do
+          echo "$row" | grep -oP '<t[dh][^>]*>.*?</t[dh]>' | sed 's/<[^>]*>//g' | tr '\n' ',' | sed 's/,$/\n/'
+        done

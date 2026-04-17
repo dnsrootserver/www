@@ -1,0 +1,189 @@
+version: 1.1.0
+premium: true
+name: Product Hunt
+description:
+  en: Get daily top products from Product Hunt, search products, and track product launches.
+  zh: 获取Product Hunt每日热门产品，搜索产品，追踪产品发布。
+tools:
+  - name: get_daily_top
+    description:
+      en: Get today's top products from Product Hunt
+      zh: 获取Product Hunt今日热门产品
+    parameters:
+      limit:
+        type: integer
+        description:
+          en: Number of products to return
+          zh: 返回产品数量
+        default: 20
+      date:
+        type: string
+        description:
+          en: Specific date (YYYY-MM-DD format, defaults to today)
+          zh: 特定日期（YYYY-MM-DD格式，默认今天）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        # Product Hunt API requires authentication
+        # Using public RSS feed as alternative
+        if [ -n "{{date}}" ] && [ "{{date}}" != "null" ]; then
+          date_str="{{date}}"
+        else
+          date_str=$(date +%Y-%m-%d)
+        fi
+        
+        echo "Fetching Product Hunt top products for: $date_str"
+        curl -s "https://www.producthunt.com/feed" | python3 << 'EOF'
+        import feedparser
+        import json
+        import sys
+        from datetime import datetime
+        
+        feed = feedparser.parse(sys.stdin.read())
+        
+        products = []
+        for entry in feed.entries[:{{limit}}]:
+            # Extract vote count from description if available
+            description = entry.get('description', '')
+            votes = 0
+            if 'votes' in description.lower():
+                import re
+                vote_match = re.search(r'(\d+)\s*votes?', description, re.IGNORECASE)
+                if vote_match:
+                    votes = int(vote_match.group(1))
+            
+            products.append({
+                'title': entry.get('title', 'Unknown'),
+                'url': entry.get('link', ''),
+                'description': description[:200],
+                'published': entry.get('published', ''),
+                'votes': votes,
+                'tags': [tag.get('term', '') for tag in entry.get('tags', [])]
+            })
+        
+        print(json.dumps(products, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: search_products
+    description:
+      en: Search Product Hunt products by keyword
+      zh: 按关键词搜索Product Hunt产品
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of results to return
+          zh: 返回结果数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        # Using web search as Product Hunt API requires OAuth
+        echo "Searching Product Hunt for: {{query}}"
+        curl -s "https://www.producthunt.com/search?q={{query}}" | python3 << 'EOF'
+        import re
+        import json
+        import sys
+        from html.parser import HTMLParser
+        
+        html = sys.stdin.read()
+        
+        # Simple extraction of product information from HTML
+        # Note: This is a basic implementation - production use would need proper API access
+        products = []
+        
+        # Extract product cards (simplified pattern)
+        pattern = r'<div[^>]*class="[^"]*post-item[^"]*"[^>]*>.*?<h3[^>]*>(.*?)</h3>.*?<p[^>]*>(.*?)</p>'
+        matches = re.findall(pattern, html, re.DOTALL)
+        
+        for i, (title, desc) in enumerate(matches[:{{limit}}]):
+            # Clean HTML tags
+            title = re.sub(r'<[^>]+>', '', title).strip()
+            desc = re.sub(r'<[^>]+>', '', desc).strip()
+            
+            products.append({
+                'title': title,
+                'description': desc[:200],
+                'url': f'https://www.producthunt.com/search?q={{query}}'
+            })
+        
+        if not products:
+            print("No products found or Product Hunt requires authentication for search.")
+            print("Try using the daily top products instead.")
+        else:
+            print(json.dumps(products, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: get_product_details
+    description:
+      en: Get details about a specific Product Hunt product
+      zh: 获取特定Product Hunt产品的详情
+    parameters:
+      product_slug:
+        type: string
+        description:
+          en: Product slug from Product Hunt URL
+          zh: Product Hunt URL中的产品slug
+        required: true
+    implementation:
+      type: shell
+      command: |
+        echo "Fetching details for product: {{product_slug}}"
+        curl -s "https://www.producthunt.com/posts/{{product_slug}}" | python3 << 'EOF'
+        import re
+        import json
+        import sys
+        
+        html = sys.stdin.read()
+        
+        # Extract basic information from HTML
+        title_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL)
+        desc_match = re.search(r'<meta[^>]*name="description"[^>]*content="([^"]*)"', html)
+        votes_match = re.search(r'(\d+)\s*upvotes?', html, re.IGNORECASE)
+        
+        product = {
+            'name': re.sub(r'<[^>]+>', '', title_match.group(1)).strip() if title_match else 'Unknown',
+            'description': desc_match.group(1) if desc_match else 'No description available',
+            'votes': int(votes_match.group(1)) if votes_match else 0,
+            'url': 'https://www.producthunt.com/posts/{{product_slug}}'
+        }
+        
+        print(json.dumps(product, indent=2, ensure_ascii=False))
+        EOF
+
+  - name: get_categories
+    description:
+      en: Get available Product Hunt categories
+      zh: 获取可用的Product Hunt类别
+    parameters: {}
+    implementation:
+      type: shell
+      command: |
+        echo "Product Hunt Categories:"
+        echo "1. Tech"
+        echo "2. Games"
+        echo "3. Podcasts"
+        echo "4. Books"
+        echo "5. Developer Tools"
+        echo "6. Design Tools"
+        echo "7. Marketing"
+        echo "8. Analytics"
+        echo "9. Finance"
+        echo "10. Education"
+        echo "11. Health"
+        echo "12. Fitness"
+        echo "13. Food"
+        echo "14. Travel"
+        echo "15. Music"
+        echo "16. Video"
+        echo "17. Photography"
+        echo "18. Home"
+        echo "19. Sports"
+        echo "20. News"

@@ -1,0 +1,32 @@
+name: ssl-check
+version: "1.1.0"
+description: "Check SSL certificate information for a domain"
+description_zh: "检查域名 SSL 证书信息"
+author: agentforge
+category: security
+triggers: ["ssl check", "check ssl", "ssl certificate", "certificate info"]
+triggers_zh: ["SSL 检查", "证书检查", "SSL 证书"]
+tags: [security, ssl]
+steps:
+  - tool: regex_extract
+    params: {text: "{{ input }}", pattern: "\\b(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}\\b", var: domain}
+  - tool: shell
+    params:
+      command: "echo | openssl s_client -connect {{ domain[0] }}:443 -servername {{ domain[0] }} 2>/dev/null | openssl x509 -noout -subject -issuer -dates -fingerprint 2>/dev/null"
+      timeout: 10
+    output: ssl_info
+  - tool: shell
+    params:
+      command: "echo | openssl s_client -connect {{ domain[0] }}:443 -servername {{ domain[0] }} 2>/dev/null | openssl x509 -noout -text 2>/dev/null | grep -A 1 -i 'subject alternative name'"
+      timeout: 10
+    output: ssl_san
+  - tool: output
+    params:
+      message: |
+        Domain: {{ domain[0] }}
+        SSL Certificate Details:
+        {{ ssl_info.stdout }}
+        Subject Alternative Names:
+        {{ ssl_san.stdout }}
+      format: panel
+      title: "SSL Certificate Check"

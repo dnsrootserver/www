@@ -1,0 +1,103 @@
+version: 1.1.0
+premium: true
+name: Reddit Search
+description:
+  en: Search Reddit posts and comments, retrieve subreddit content, and analyze discussions.
+  zh: 搜索Reddit帖子和评论，获取子版块内容，分析讨论。
+tools:
+  - name: search_posts
+    description:
+      en: Search Reddit posts by keyword or phrase
+      zh: 按关键词或短语搜索Reddit帖子
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      subreddit:
+        type: string
+        description:
+          en: Limit search to specific subreddit (without r/)
+          zh: 限制搜索到特定子版块（不带r/）
+        default: null
+      sort:
+        type: string
+        enum: [relevance, hot, top, new, comments]
+        description:
+          en: Sort results by
+          zh: 结果排序方式
+        default: relevance
+      time:
+        type: string
+        enum: [hour, day, week, month, year, all]
+        description:
+          en: Time filter for results
+          zh: 结果时间过滤器
+        default: all
+      limit:
+        type: integer
+        description:
+          en: Number of results to return (max 100)
+          zh: 返回结果数量（最多100）
+        default: 25
+    implementation:
+      type: shell
+      command: |
+        if [ -n "{{subreddit}}" ] && [ "{{subreddit}}" != "null" ]; then
+          url="https://www.reddit.com/r/{{subreddit}}/search.json?q={{query}}&sort={{sort}}&t={{time}}&limit={{limit}}"
+        else
+          url="https://www.reddit.com/search.json?q={{query}}&sort={{sort}}&t={{time}}&limit={{limit}}"
+        fi
+        curl -s -H "User-Agent: AgentForge/1.0" "$url" | jq '.data.children[] | {title: .data.title, author: .data.author, score: .data.score, num_comments: .data.num_comments, created_utc: .data.created_utc, url: .data.url, selftext: .data.selftext[0:200]}'
+
+  - name: get_subreddit_hot
+    description:
+      en: Get hot posts from a subreddit
+      zh: 获取子版块热门帖子
+    parameters:
+      subreddit:
+        type: string
+        description:
+          en: Subreddit name (without r/)
+          zh: 子版块名称（不带r/）
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of posts to return
+          zh: 返回帖子数量
+        default: 25
+    implementation:
+      type: shell
+      command: |
+        curl -s -H "User-Agent: AgentForge/1.0" "https://www.reddit.com/r/{{subreddit}}/hot.json?limit={{limit}}" | jq '.data.children[] | {title: .data.title, author: .data.author, score: .data.score, num_comments: .data.num_comments, created_utc: .data.created_utc, url: .data.url}'
+
+  - name: get_post_comments
+    description:
+      en: Get comments from a specific Reddit post
+      zh: 获取特定Reddit帖子的评论
+    parameters:
+      post_id:
+        type: string
+        description:
+          en: Reddit post ID
+          zh: Reddit帖子ID
+        required: true
+      subreddit:
+        type: string
+        description:
+          en: Subreddit name
+          zh: 子版块名称
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of comments to return
+          zh: 返回评论数量
+        default: 50
+    implementation:
+      type: shell
+      command: |
+        curl -s -H "User-Agent: AgentForge/1.0" "https://www.reddit.com/r/{{subreddit}}/comments/{{post_id}}.json?limit={{limit}}" | jq '.[1].data.children[] | {author: .data.author, body: .data.body[0:500], score: .data.score, created_utc: .data.created_utc}'

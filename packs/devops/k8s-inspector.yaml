@@ -1,0 +1,246 @@
+version: 1.1.0
+premium: true
+name: Kubernetes Inspector
+description:
+  en: Inspect Kubernetes cluster resources, pods, services, deployments, and events.
+  zh: 检查Kubernetes集群资源、Pod、服务、部署和事件。
+triggers:
+  en:
+    - "kubernetes"
+    - "k8s"
+    - "kubectl"
+    - "kube"
+    - "pod"
+    - "cluster"
+  zh:
+    - "kubernetes"
+    - "k8s"
+    - "kubectl"
+    - "kube"
+    - "pod"
+    - "集群"
+tools:
+  - name: cluster_info
+    description:
+      en: Show cluster information and node status
+      zh: 显示集群信息和节点状态
+    parameters:
+      detailed:
+        type: boolean
+        description:
+          en: Show detailed node information
+          zh: 显示详细的节点信息
+        default: false
+    implementation:
+      type: shell
+      command: |
+        echo "=== Cluster Info ==="
+        kubectl cluster-info 2>/dev/null || echo "kubectl not configured or cluster not reachable"
+        echo ""
+        echo "=== Node Status ==="
+        kubectl get nodes -o wide 2>/dev/null || echo "Cannot retrieve nodes"
+        echo ""
+        if [ "{{detailed}}" = "true" ]; then
+          echo "=== Node Resources ==="
+          kubectl top nodes 2>/dev/null || echo "Metrics not available"
+        fi
+  - name: pod_status
+    description:
+      en: List pods with status, restarts, and age
+      zh: 列出Pod的状态、重启次数和运行时间
+    parameters:
+      namespace:
+        type: string
+        description:
+          en: Kubernetes namespace (default: all namespaces)
+          zh: Kubernetes命名空间（默认：所有命名空间）
+        default: "--all-namespaces"
+      status_filter:
+        type: string
+        description:
+          en: Filter by status (Running, Pending, Error, etc.)
+          zh: 按状态过滤（Running、Pending、Error等）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        NS="{{namespace}}"
+        if [ "$NS" = "--all-namespaces" ]; then
+          NS_FLAG="--all-namespaces"
+        else
+          NS_FLAG="-n $NS"
+        fi
+        
+        echo "=== Pod Status ==="
+        if [ -n "{{status_filter}}" ] && [ "{{status_filter}}" != "null" ]; then
+          kubectl get pods $NS_FLAG --field-selector=status.phase={{status_filter}} -o wide 2>/dev/null
+        else
+          kubectl get pods $NS_FLAG -o wide 2>/dev/null
+        fi
+        echo ""
+        echo "=== Pod Summary ==="
+        kubectl get pods $NS_FLAG 2>/dev/null | awk 'NR>1 {status[$3]++} END {for(s in status) print s ": " status[s]}'
+  - name: pod_logs
+    description:
+      en: Get logs from a specific pod
+      zh: 获取特定Pod的日志
+    parameters:
+      pod_name:
+        type: string
+        description:
+          en: Pod name or partial name match
+          zh: Pod名称或部分名称匹配
+        required: true
+      namespace:
+        type: string
+        description:
+          en: Kubernetes namespace
+          zh: Kubernetes命名空间
+        default: "default"
+      container:
+        type: string
+        description:
+          en: Container name (if pod has multiple containers)
+          zh: 容器名称（如果Pod有多个容器）
+        default: null
+      tail:
+        type: integer
+        description:
+          en: Number of lines to show from the end
+          zh: 从末尾显示的行数
+        default: 100
+    implementation:
+      type: shell
+      command: |
+        CONTAINER_FLAG=""
+        if [ -n "{{container}}" ] && [ "{{container}}" != "null" ]; then
+          CONTAINER_FLAG="-c {{container}}"
+        fi
+        
+        # Try to find exact pod name
+        POD=$(kubectl get pods -n {{namespace}} 2>/dev/null | grep "{{pod_name}}" | head -1 | awk '{print $1}')
+        if [ -z "$POD" ]; then
+          echo "Pod '{{pod_name}}' not found in namespace '{{namespace}}'"
+          exit 1
+        fi
+        
+        echo "=== Logs for pod $POD ==="
+        kubectl logs -n {{namespace}} $POD $CONTAINER_FLAG --tail={{tail}} 2>&1
+  - name: deployment_status
+    description:
+      en: Show deployment status and rollout history
+      zh: 显示部署状态和发布历史
+    parameters:
+      namespace:
+        type: string
+        description:
+          en: Kubernetes namespace
+          zh: Kubernetes命名空间
+        default: "--all-namespaces"
+    implementation:
+      type: shell
+      command: |
+        NS="{{namespace}}"
+        if [ "$NS" = "--all-namespaces" ]; then
+          NS_FLAG="--all-namespaces"
+        else
+          NS_FLAG="-n $NS"
+        fi
+        
+        echo "=== Deployments ==="
+        kubectl get deployments $NS_FLAG -o wide 2>/dev/null
+        echo ""
+        echo "=== ReplicaSets ==="
+        kubectl get rs $NS_FLAG 2>/dev/null
+        echo ""
+        echo "=== StatefulSets ==="
+        kubectl get statefulsets $NS_FLAG 2>/dev/null
+  - name: service_status
+    description:
+      en: Show services and endpoints
+      zh: 显示服务和端点
+    parameters:
+      namespace:
+        type: string
+        description:
+          en: Kubernetes namespace
+          zh: Kubernetes命名空间
+        default: "--all-namespaces"
+    implementation:
+      type: shell
+      command: |
+        NS="{{namespace}}"
+        if [ "$NS" = "--all-namespaces" ]; then
+          NS_FLAG="--all-namespaces"
+        else
+          NS_FLAG="-n $NS"
+        fi
+        
+        echo "=== Services ==="
+        kubectl get services $NS_FLAG -o wide 2>/dev/null
+        echo ""
+        echo "=== Ingresses ==="
+        kubectl get ingress $NS_FLAG 2>/dev/null
+        echo ""
+        echo "=== Endpoints ==="
+        kubectl get endpoints $NS_FLAG 2>/dev/null | head -20
+  - name: events_monitor
+    description:
+      en: Show recent cluster events and warnings
+      zh: 显示最近的集群事件和警告
+    parameters:
+      namespace:
+        type: string
+        description:
+          en: Kubernetes namespace
+          zh: Kubernetes命名空间
+        default: "--all-namespaces"
+      warnings_only:
+        type: boolean
+        description:
+          en: Show only warning events
+          zh: 仅显示警告事件
+        default: false
+    implementation:
+      type: shell
+      command: |
+        NS="{{namespace}}"
+        if [ "$NS" = "--all-namespaces" ]; then
+          NS_FLAG="--all-namespaces"
+        else
+          NS_FLAG="-n $NS"
+        fi
+        
+        echo "=== Recent Events ==="
+        if [ "{{warnings_only}}" = "true" ]; then
+          kubectl get events $NS_FLAG --field-selector type=Warning --sort-by='.lastTimestamp' 2>/dev/null | tail -30
+        else
+          kubectl get events $NS_FLAG --sort-by='.lastTimestamp' 2>/dev/null | tail -30
+        fi
+  - name: resource_usage
+    description:
+      en: Show resource usage for pods and nodes
+      zh: 显示Pod和节点的资源使用情况
+    parameters:
+      namespace:
+        type: string
+        description:
+          en: Kubernetes namespace
+          zh: Kubernetes命名空间
+        default: "--all-namespaces"
+    implementation:
+      type: shell
+      command: |
+        echo "=== Node Resource Usage ==="
+        kubectl top nodes 2>/dev/null || echo "Metrics server not available"
+        echo ""
+        
+        NS="{{namespace}}"
+        if [ "$NS" = "--all-namespaces" ]; then
+          NS_FLAG="--all-namespaces"
+        else
+          NS_FLAG="-n $NS"
+        fi
+        
+        echo "=== Pod Resource Usage ==="
+        kubectl top pods $NS_FLAG 2>/dev/null | head -30 || echo "Metrics not available"

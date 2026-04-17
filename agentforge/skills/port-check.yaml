@@ -1,0 +1,26 @@
+name: port-check
+version: "1.1.0"
+description: "Check if a specific port is open on a host"
+description_zh: "检查主机端口是否开放"
+author: agentforge
+category: network
+triggers: ["port check", "check port", "port open", "test port"]
+triggers_zh: ["端口检查", "检查端口", "端口开放"]
+tags: [network, diagnostic]
+steps:
+  - tool: regex_extract
+    params: {text: "{{ input }}", pattern: "\\b((?:\\d{1,3}\\.){3}\\d{1,3}|(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,})\\s+(\\d{1,5})\\b", var: matches}
+  - tool: shell
+    params:
+      command: "nc -zv {{ matches[0] }} {{ matches[1] }} 2>&1"
+      timeout: 10
+    output: port_check
+  - tool: output
+    params:
+      message: |
+        Host: {{ matches[0] }}
+        Port: {{ matches[1] }}
+        Result:
+        {{ port_check.stdout }}
+      format: panel
+      title: "Port Check Results"

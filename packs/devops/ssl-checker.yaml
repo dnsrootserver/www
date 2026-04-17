@@ -1,0 +1,203 @@
+version: 1.1.0
+premium: true
+name: SSL Checker
+description:
+  en: Monitor SSL certificates for expiration, validity, and security issues across multiple domains.
+  zh: 监控SSL证书的过期时间、有效性和安全问题，支持多个域名。
+triggers:
+  en:
+    - "ssl checker"
+    - "ssl monitor"
+    - "certificate check"
+    - "ssl expiration"
+    - "check ssl"
+  zh:
+    - "SSL检查器"
+    - "SSL监控"
+    - "证书检查"
+    - "SSL过期"
+    - "检查SSL"
+tools:
+  - name: check_ssl
+    description:
+      en: Check SSL certificate for a single domain
+      zh: 检查单个域名的SSL证书
+    parameters:
+      domain:
+        type: string
+        description:
+          en: Domain name to check
+          zh: 要检查的域名
+        required: true
+      port:
+        type: integer
+        description:
+          en: Port number (default 443)
+          zh: 端口号（默认443）
+        default: 443
+    implementation:
+      type: shell
+      command: |
+        echo "=== SSL Certificate Check: {{domain}}:{{port}} ==="
+        echo ""
+        
+        # Get certificate info
+        CERT_INFO=$(echo | openssl s_client -connect {{domain}}:{{port}} -servername {{domain}} 2>/dev/null | openssl x509 -noout -subject -issuer -dates -fingerprint 2>/dev/null)
+        
+        if [ -z "$CERT_INFO" ]; then
+          echo "❌ Failed to retrieve SSL certificate"
+          exit 1
+        fi
+        
+        echo "$CERT_INFO"
+        echo ""
+        
+        # Check expiration
+        EXPIRY_DATE=$(echo | openssl s_client -connect {{domain}}:{{port}} -servername {{domain}} 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+        EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$EXPIRY_DATE" +%s 2>/dev/null)
+        NOW_EPOCH=$(date +%s)
+        DAYS_LEFT=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))
+        
+        if [ $DAYS_LEFT -lt 0 ]; then
+          echo "❌ Certificate EXPIRED $((-$DAYS_LEFT)) days ago"
+        elif [ $DAYS_LEFT -lt 30 ]; then
+          echo "⚠️  Certificate expires in $DAYS_LEFT days"
+        else
+          echo "✅ Certificate valid for $DAYS_LEFT days"
+        fi
+        
+        echo ""
+        echo "=== Subject Alternative Names ==="
+        echo | openssl s_client -connect {{domain}}:{{port}} -servername {{domain}} 2>/dev/null | openssl x509 -noout -text 2>/dev/null | grep -A 1 "Subject Alternative Name" | tail -1
+  - name: check_multiple
+    description:
+      en: Check SSL certificates for multiple domains
+      zh: 检查多个域名的SSL证书
+    parameters:
+      domains:
+        type: string
+        description:
+          en: Comma-separated list of domains
+          zh: 逗号分隔的域名列表
+        required: true
+      warning_days:
+        type: integer
+        description:
+          en: Warning threshold in days (default 30)
+          zh: 警告阈值天数（默认30）
+        default: 30
+    implementation:
+      type: shell
+      command: |
+        echo "=== Multiple SSL Certificate Check ==="
+        echo ""
+        
+        IFS=',' read -ra DOMAINS <<< "{{domains}}"
+        
+        for domain in "${DOMAINS[@]}"; do
+          domain=$(echo "$domain" | xargs)  # Trim whitespace
+          echo "Checking $domain..."
+          
+          EXPIRY_DATE=$(echo | openssl s_client -connect $domain:443 -servername $domain 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+          
+          if [ -z "$EXPIRY_DATE" ]; then
+            echo "  ❌ Failed to check"
+            continue
+          fi
+          
+          EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$EXPIRY_DATE" +%s 2>/dev/null)
+          NOW_EPOCH=$(date +%s)
+          DAYS_LEFT=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))
+          
+          if [ $DAYS_LEFT -lt 0 ]; then
+            echo "  ❌ EXPIRED $((-$DAYS_LEFT)) days ago"
+          elif [ $DAYS_LEFT -lt {{warning_days}} ]; then
+            echo "  ⚠️  Expires in $DAYS_LEFT days"
+          else
+            echo "  ✅ Valid for $DAYS_LEFT days"
+          fi
+        done
+  - name: ssl_security
+    description:
+      en: Check SSL/TLS security configuration and vulnerabilities
+      zh: 检查SSL/TLS安全配置和漏洞
+    parameters:
+      domain:
+        type: string
+        description:
+          en: Domain name to check
+          zh: 要检查的域名
+        required: true
+    implementation:
+      type: shell
+      command: |
+        echo "=== SSL/TLS Security Check: {{domain}} ==="
+        echo ""
+        
+        echo "=== Supported Protocols ==="
+        for proto in ssl3 tls1 tls1_1 tls1_2 tls1_3; do
+          if echo | openssl s_client -connect {{domain}}:443 -servername {{domain}} -$proto 2>&1 | grep -q "CONNECTED"; then
+            echo "  ✅ $proto supported"
+          else
+            echo "  ❌ $proto not supported"
+          fi
+        done
+        
+        echo ""
+        echo "=== Cipher Suites ==="
+        echo | openssl s_client -connect {{domain}}:443 -servername {{domain}} 2>/dev/null | grep -E "Cipher|Protocol" | head -5
+        
+        echo ""
+        echo "=== Certificate Chain ==="
+        echo | openssl s_client -connect {{domain}}:443 -servername {{domain}} -showcerts 2>/dev/null | grep -E "^[0-9]+ s:|^[0-9]+ i:" | head -10
+  - name: ssl_report
+    description:
+      en: Generate detailed SSL certificate report
+      zh: 生成详细的SSL证书报告
+    parameters:
+      domain:
+        type: string
+        description:
+          en: Domain name
+          zh: 域名
+        required: true
+      output_file:
+        type: string
+        description:
+          en: Output file path (optional)
+          zh: 输出文件路径（可选）
+        default: null
+    implementation:
+      type: shell
+      command: |
+        REPORT=""
+        
+        REPORT+="=== SSL Certificate Report for {{domain}} ===\n"
+        REPORT+="Generated: $(date)\n\n"
+        
+        # Full certificate details
+        REPORT+="=== Certificate Details ===\n"
+        REPORT+=$(echo | openssl s_client -connect {{domain}}:443 -servername {{domain}} 2>/dev/null | openssl x509 -noout -text 2>/dev/null | grep -E "Subject:|Issuer:|Not Before|Not After|Public Key|Signature Algorithm" | head -10)
+        REPORT+="\n\n"
+        
+        # Expiration check
+        EXPIRY_DATE=$(echo | openssl s_client -connect {{domain}}:443 -servername {{domain}} 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+        EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$EXPIRY_DATE" +%s 2>/dev/null)
+        NOW_EPOCH=$(date +%s)
+        DAYS_LEFT=$(( ($EXPIRY_EPOCH - $NOW_EPOCH) / 86400 ))
+        
+        REPORT+="=== Expiration Status ===\n"
+        if [ $DAYS_LEFT -lt 0 ]; then
+          REPORT+="Status: ❌ EXPIRED $((-$DAYS_LEFT)) days ago\n"
+        elif [ $DAYS_LEFT -lt 30 ]; then
+          REPORT+="Status: ⚠️  Expires in $DAYS_LEFT days\n"
+        else
+          REPORT+="Status: ✅ Valid for $DAYS_LEFT days\n"
+        fi
+        
+        echo -e "$REPORT"
+        
+        if [ -n "{{output_file}}" ] && [ "{{output_file}}" != "null" ]; then
+          echo -e "$REPORT" > "{{output_file}}"
+          echo "Report saved to {{output_file}}"
+        fi

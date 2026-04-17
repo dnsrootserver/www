@@ -1,0 +1,177 @@
+version: 1.1.0
+premium: true
+name: Schema Generator
+description:
+  en: Generate JSON Schema, TypeScript interfaces, or database schemas from sample data.
+  zh: 从样本数据生成JSON Schema、TypeScript接口或数据库模式。
+tools:
+  - name: generate_json_schema
+    description:
+      en: Generate JSON Schema from JSON data
+      zh: 从JSON数据生成JSON Schema
+    parameters:
+      data_file:
+        type: string
+        description:
+          en: Path to JSON file
+          zh: JSON文件路径
+        required: true
+      schema_title:
+        type: string
+        description:
+          en: Title for the schema
+          zh: 模式标题
+        default: "Generated Schema"
+      output_file:
+        type: string
+        description:
+          en: Output file path
+          zh: 输出文件路径
+        default: "schema.json"
+    implementation:
+      type: shell
+      command: |
+        python3 << EOF
+        import json
+        import sys
+        def infer_schema(data, title="{{schema_title}}"):
+            if isinstance(data, dict):
+                properties = {}
+                required = []
+                for key, value in data.items():
+                    properties[key] = infer_schema(value, key)
+                    if value is not None:
+                        required.append(key)
+                return {
+                    "type": "object",
+                    "title": title,
+                    "properties": properties,
+                    "required": required
+                }
+            elif isinstance(data, list):
+                if data:
+                    return {
+                        "type": "array",
+                        "items": infer_schema(data[0], title + " Item")
+                    }
+                return {"type": "array", "items": {}}
+            elif isinstance(data, str):
+                return {"type": "string"}
+            elif isinstance(data, bool):
+                return {"type": "boolean"}
+            elif isinstance(data, int):
+                return {"type": "integer"}
+            elif isinstance(data, float):
+                return {"type": "number"}
+            elif data is None:
+                return {"type": "null"}
+            return {"type": "string"}
+        with open("{{data_file}}") as f:
+            data = json.load(f)
+        schema = {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            **infer_schema(data)
+        }
+        with open("{{output_file}}", 'w') as f:
+            json.dump(schema, f, indent=2)
+        print(f"Schema generated: {{output_file}}")
+        print(json.dumps(schema, indent=2))
+        EOF
+  - name: csv_to_schema
+    description:
+      en: Generate schema from CSV file (detects types)
+      zh: 从CSV文件生成模式（检测类型）
+    parameters:
+      csv_file:
+        type: string
+        description:
+          en: Path to CSV file
+          zh: CSV文件路径
+        required: true
+      output_format:
+        type: string
+        enum: [json_schema, sql_ddl, typescript]
+        description:
+          en: Output format
+          zh: 输出格式
+        default: json_schema
+      output_file:
+        type: string
+        description:
+          en: Output file path
+          zh: 输出文件路径
+        default: null
+    implementation:
+      type: shell
+      command: |
+        python3 << EOF
+        import csv
+        import json
+        import re
+        csv_file = "{{csv_file}}"
+        output_format = "{{output_format}}"
+        output_file = "{{output_file}}"
+        if output_file == "null":
+            ext = {"json_schema": ".json", "sql_ddl": ".sql", "typescript": ".ts"}
+            output_file = csv_file.rsplit('.', 1)[0] + "_schema" + ext.get(output_format, ".txt")
+        # Read CSV and infer types
+        with open(csv_file) as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            headers = reader.fieldnames
+        # Detect types from sample data
+        def detect_type(values):
+            values = [v for v in values if v.strip()]
+            if not values:
+                return "string"
+            # Check if all are integers
+            if all(re.match(r'^-?\d+$', v) for v in values):
+                return "integer"
+            # Check if all are numbers
+            if all(re.match(r'^-?\d*\.?\d+$', v) for v in values):
+                return "number"
+            # Check if boolean
+            if all(v.lower() in ('true', 'false', '0', '1') for v in values):
+                return "boolean"
+            # Check date pattern
+            if all(re.match(r'^\d{4}-\d{2}-\d{2}', v) for v in values):
+                return "string"
+            return "string"
+        column_types = {}
+        for col in headers:
+            values = [row.get(col, '') for row in rows]
+            column_types[col] = detect_type(values)
+        if output_format == "json_schema":
+            schema = {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "title": csv_file.split('/')[-1].replace('.csv', ''),
+                "type": "object",
+                "properties": {
+                    col: {"type": typ} for col, typ in column_types.items()
+                },
+                "required": headers
+            }
+            with open(output_file, 'w') as f:
+                json.dump(schema, f, indent=2)
+        elif output_format == "sql_ddl":
+            sql_type = {"string": "TEXT", "integer": "INTEGER", "number": "REAL", "boolean": "BOOLEAN"}
+            table = csv_file.split('/')[-1].replace('.csv', '').replace('-', '_')
+            with open(output_file, 'w') as f:
+                f.write(f"CREATE TABLE {table} (\n")
+                for col in headers:
+                    typ = sql_type.get(column_types[col], "TEXT")
+                    col_name = col.replace(' ', '_').replace('-', '_')
+                    f.write(f"  {col_name} {typ},\n")
+                f.write(");\n")
+        elif output_format == "typescript":
+            ts_type = {"string": "string", "integer": "number", "number": "number", "boolean": "boolean"}
+            interface_name = csv_file.split('/')[-1].replace('.csv', '').replace('-', '_').title()
+            with open(output_file, 'w') as f:
+                f.write(f"interface {interface_name} {{\n")
+                for col in headers:
+                    typ = ts_type.get(column_types[col], "any")
+                    col_name = col.replace(' ', '_').replace('-', '_')
+                    f.write(f"  {col_name}: {typ};\n")
+                f.write("}\n")
+        print(f"Schema generated: {output_format} -> {output_file}")
+        EOF

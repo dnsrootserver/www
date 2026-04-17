@@ -1,0 +1,33 @@
+name: text-stats
+version: "1.1.0"
+description: "Count words, characters, and lines in text"
+description_zh: "统计文本中的单词、字符和行数"
+author: agentforge
+category: content
+triggers: ["text statistics", "count words", "text analysis", "word count", "character count"]
+triggers_zh: ["文本统计", "字数统计", "文字分析", "字符统计"]
+tags: [text, analysis, utility]
+steps:
+  - tool: python
+    params:
+      code: |
+        text = """{{ input }}"""
+        words = text.split()
+        chars = len(text)
+        chars_no_spaces = len(text.replace(' ', ''))
+        lines = text.count('\n') + 1 if text else 0
+        
+        stats = f"""Text Statistics:
+        Lines: {lines}
+        Words: {len(words)}
+        Characters: {chars}
+        Characters (no spaces): {chars_no_spaces}
+        Average word length: {sum(len(w) for w in words)/len(words):.2f} chars"""
+        
+        print(stats)
+      var: result
+  - tool: output
+    params:
+      message: "{{ result }}"
+      format: panel
+      title: "Text Statistics"

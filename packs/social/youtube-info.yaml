@@ -1,0 +1,198 @@
+version: 1.1.0
+premium: true
+name: YouTube Info
+description:
+  en: Get YouTube video information, search videos, and extract channel details.
+  zh: 获取YouTube视频信息，搜索视频，提取频道详情。
+tools:
+  - name: get_video_info
+    description:
+      en: Get detailed information about a YouTube video
+      zh: 获取YouTube视频的详细信息
+    parameters:
+      video_id:
+        type: string
+        description:
+          en: YouTube video ID or URL
+          zh: YouTube视频ID或URL
+        required: true
+    implementation:
+      type: shell
+      command: |
+        # Extract video ID from URL if full URL provided
+        video_id="{{video_id}}"
+        if [[ "$video_id" == *"youtube.com"* ]] || [[ "$video_id" == *"youtu.be"* ]]; then
+          if [[ "$video_id" == *"v="* ]]; then
+            video_id=$(echo "$video_id" | sed -n 's/.*v=\([^&]*\).*/\1/p')
+          else
+            video_id=$(echo "$video_id" | sed -n 's|.*/\([^?]*\).*|\1|p')
+          fi
+        fi
+        
+        # Use youtube-dl or yt-dlp to get video info
+        if command -v yt-dlp &> /dev/null; then
+          yt-dlp --dump-json "https://www.youtube.com/watch?v=$video_id" | jq '{
+            title: .title,
+            description: .description,
+            duration: .duration,
+            duration_string: .duration_string,
+            upload_date: .upload_date,
+            view_count: .view_count,
+            like_count: .like_count,
+            comment_count: .comment_count,
+            channel: .channel,
+            channel_id: .channel_id,
+            uploader: .uploader,
+            uploader_id: .uploader_id,
+            categories: .categories,
+            tags: .tags,
+            thumbnail: .thumbnail,
+            url: .webpage_url,
+            resolution: .resolution,
+            fps: .fps,
+            filesize: .filesize
+          }'
+        else
+          echo "yt-dlp not found. Installing..."
+          pip3 install yt-dlp -q
+          yt-dlp --dump-json "https://www.youtube.com/watch?v=$video_id" | jq '{
+            title: .title,
+            description: .description,
+            duration: .duration,
+            duration_string: .duration_string,
+            upload_date: .upload_date,
+            view_count: .view_count,
+            like_count: .like_count,
+            comment_count: .comment_count,
+            channel: .channel,
+            channel_id: .channel_id,
+            uploader: .uploader,
+            uploader_id: .uploader_id,
+            categories: .categories,
+            tags: .tags,
+            thumbnail: .thumbnail,
+            url: .webpage_url
+          }'
+        fi
+
+  - name: search_videos
+    description:
+      en: Search YouTube videos by keyword
+      zh: 按关键词搜索YouTube视频
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      limit:
+        type: integer
+        description:
+          en: Number of videos to return
+          zh: 返回视频数量
+        default: 10
+      duration:
+        type: string
+        enum: [any, short, medium, long]
+        description:
+          en: Filter by video duration
+          zh: 按视频时长过滤
+        default: any
+      upload_date:
+        type: string
+        enum: [any, hour, today, week, month, year]
+        description:
+          en: Filter by upload date
+          zh: 按上传日期过滤
+        default: any
+    implementation:
+      type: shell
+      command: |
+        # Build yt-dlp command
+        cmd="yt-dlp --flat-playlist --print \"{\\\"id\\\": \\\"%(id)s\\\", \\\"title\\\": \\\"%(title)s\\\", \\\"url\\\": \\\"%(url)s\\\", \\\"duration\\\": %(duration)s, \\\"view_count\\\": %(view_count)s, \\\"upload_date\\\": \\\"%(upload_date)s\\\"}\""
+        
+        # Add duration filter
+        case "{{duration}}" in
+          "short") cmd="$cmd --match-filter 'duration<240'" ;;
+          "medium") cmd="$cmd --match-filter 'duration>=240 & duration<1200'" ;;
+          "long") cmd="$cmd --match-filter 'duration>=1200'" ;;
+        esac
+        
+        # Execute search
+        eval "$cmd \"ytsearch{{limit}}:{{query}}\"" | head -n {{limit}} | jq -s '.' 2>/dev/null || echo "Search completed. Use yt-dlp directly for more options."
+
+  - name: get_channel_info
+    description:
+      en: Get information about a YouTube channel
+      zh: 获取YouTube频道信息
+    parameters:
+      channel_id:
+        type: string
+        description:
+          en: YouTube channel ID or URL
+          zh: YouTube频道ID或URL
+        required: true
+    implementation:
+      type: shell
+      command: |
+        # Extract channel ID if URL provided
+        channel_id="{{channel_id}}"
+        if [[ "$channel_id" == *"youtube.com"* ]]; then
+          if [[ "$channel_id" == *"channel/"* ]]; then
+            channel_id=$(echo "$channel_id" | sed -n 's|.*/channel/\([^/?]*\).*|\1|p')
+          elif [[ "$channel_id" == *"@"* ]]; then
+            channel_id=$(echo "$channel_id" | sed -n 's|.*/@\([^/?]*\).*|\1|p')
+          fi
+        fi
+        
+        # Get channel info using yt-dlp
+        yt-dlp --print "{\\\"channel\\\": \\\"%(channel)s\\\", \\\"channel_id\\\": \\\"%(channel_id)s\\\", \\\"channel_url\\\": \\\"%(channel_url)s\\\", \\\"subscriber_count\\\": %(subscriber_count)s, \\\"video_count\\\": %(n_entries)s}" "https://www.youtube.com/channel/$channel_id" 2>/dev/null || echo "Channel not found or requires authentication."
+
+  - name: download_video
+    description:
+      en: Download a YouTube video or audio
+      zh: 下载YouTube视频或音频
+    parameters:
+      video_id:
+        type: string
+        description:
+          en: YouTube video ID or URL
+          zh: YouTube视频ID或URL
+        required: true
+      format:
+        type: string
+        enum: [video, audio, best]
+        description:
+          en: Download format
+          zh: 下载格式
+        default: best
+      output_path:
+        type: string
+        description:
+          en: Output directory
+          zh: 输出目录
+        default: "."
+    implementation:
+      type: shell
+      command: |
+        video_id="{{video_id}}"
+        if [[ "$video_id" == *"youtube.com"* ]] || [[ "$video_id" == *"youtu.be"* ]]; then
+          url="$video_id"
+        else
+          url="https://www.youtube.com/watch?v=$video_id"
+        fi
+        
+        case "{{format}}" in
+          "video")
+            yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" -o "{{output_path}}/%(title)s.%(ext)s" "$url"
+            ;;
+          "audio")
+            yt-dlp -x --audio-format mp3 -o "{{output_path}}/%(title)s.%(ext)s" "$url"
+            ;;
+          "best")
+            yt-dlp -f "bestvideo+bestaudio/best" -o "{{output_path}}/%(title)s.%(ext)s" "$url"
+            ;;
+        esac
+        
+        echo "Download completed!"

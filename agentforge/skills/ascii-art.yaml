@@ -1,0 +1,48 @@
+name: ascii-art
+version: "1.1.0"
+description: "Generate ASCII art text using pyfiglet"
+description_zh: "使用 pyfiglet 生成 ASCII 艺术文字"
+author: agentforge
+category: creative
+triggers: ["ascii art", "text art", "figlet", "banner text", "large text"]
+triggers_zh: ["ASCII艺术", "文字艺术", "横幅文字", "大字"]
+tags: [text, creative, ascii]
+steps:
+  - tool: python
+    params:
+      code: |
+        try:
+            import pyfiglet
+        except ImportError:
+            import subprocess
+            subprocess.run(["pip", "install", "pyfiglet"], capture_output=True)
+            import pyfiglet
+        
+        text = "{{ input }}".strip()
+        if not text:
+            text = "Hello"
+        
+        # Limit text length
+        if len(text) > 20:
+            text = text[:20]
+        
+        # Generate ASCII art with different fonts
+        fonts = ['standard', 'slant', 'banner', 'big', 'block']
+        
+        output = "🎨 ASCII Art Generator\n\n"
+        
+        # Main art with standard font
+        ascii_art = pyfiglet.figlet_format(text, font='standard')
+        output += f"=== Standard Font ===\n{ascii_art}\n"
+        
+        # Also show slant font
+        ascii_art_slant = pyfiglet.figlet_format(text, font='slant')
+        output += f"=== Slant Font ===\n{ascii_art_slant}"
+        
+        print(output)
+      var: result
+  - tool: output
+    params:
+      message: "{{ result }}"
+      format: panel
+      title: "ASCII Art Generator"

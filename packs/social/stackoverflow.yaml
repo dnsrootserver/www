@@ -1,0 +1,196 @@
+version: 1.1.0
+premium: true
+name: Stack Overflow
+description:
+  en: Search Stack Overflow questions, get answers, and retrieve user activity.
+  zh: 搜索Stack Overflow问题，获取答案，检索用户活动。
+tools:
+  - name: search_questions
+    description:
+      en: Search Stack Overflow questions by keyword or tag
+      zh: 按关键词或标签搜索Stack Overflow问题
+    parameters:
+      query:
+        type: string
+        description:
+          en: Search query
+          zh: 搜索查询
+        required: true
+      tags:
+        type: string
+        description:
+          en: Comma-separated list of tags
+          zh: 逗号分隔的标签列表
+        default: null
+      sort:
+        type: string
+        enum: [activity, votes, creation, relevance]
+        description:
+          en: Sort results by
+          zh: 结果排序方式
+        default: relevance
+      limit:
+        type: integer
+        description:
+          en: Number of results to return (max 100)
+          zh: 返回结果数量（最多100）
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        # Build query parameters
+        params="order=desc&sort={{sort}}&site=stackoverflow&intitle={{query}}&pagesize={{limit}}"
+        
+        if [ -n "{{tags}}" ] && [ "{{tags}}" != "null" ]; then
+          params="$params&tagged={{tags}}"
+        fi
+        
+        curl -s "https://api.stackexchange.com/2.3/questions?$params" | jq '.items[] | {
+          title: .title,
+          link: .link,
+          score: .score,
+          view_count: .view_count,
+          answer_count: .answer_count,
+          is_answered: .is_answered,
+          tags: .tags,
+          creation_date: (.creation_date | todate),
+          last_activity_date: (.last_activity_date | todate),
+          owner: {
+            display_name: .owner.display_name,
+            reputation: .owner.reputation,
+            user_id: .owner.user_id
+          }
+        }'
+
+  - name: get_question_answers
+    description:
+      en: Get answers for a specific Stack Overflow question
+      zh: 获取特定Stack Overflow问题的答案
+    parameters:
+      question_id:
+        type: string
+        description:
+          en: Stack Overflow question ID
+          zh: Stack Overflow问题ID
+        required: true
+      sort:
+        type: string
+        enum: [votes, activity, creation]
+        description:
+          en: Sort answers by
+          zh: 答案排序方式
+        default: votes
+      limit:
+        type: integer
+        description:
+          en: Number of answers to return
+          zh: 返回答案数量
+        default: 10
+    implementation:
+      type: shell
+      command: |
+        curl -s "https://api.stackexchange.com/2.3/questions/{{question_id}}/answers?order=desc&sort={{sort}}&site=stackoverflow&pagesize={{limit}}&filter=withbody" | jq '.items[] | {
+          answer_id: .answer_id,
+          score: .score,
+          is_accepted: .is_accepted,
+          body: (.body | gsub("<[^>]*>"; "") | .[0:500]),
+          creation_date: (.creation_date | todate),
+          owner: {
+            display_name: .owner.display_name,
+            reputation: .owner.reputation
+          }
+        }'
+
+  - name: get_user_profile
+    description:
+      en: Get Stack Overflow user profile and activity
+      zh: 获取Stack Overflow用户资料和活动
+    parameters:
+      user_id:
+        type: string
+        description:
+          en: Stack Overflow user ID
+          zh: Stack Overflow用户ID
+        required: true
+    implementation:
+      type: shell
+      command: |
+        # Get user info
+        curl -s "https://api.stackexchange.com/2.3/users/{{user_id}}?site=stackoverflow" | jq '.items[0] | {
+          user_id: .user_id,
+          display_name: .display_name,
+          reputation: .reputation,
+          gold_badges: .badge_counts.gold,
+          silver_badges: .badge_counts.silver,
+          bronze_badges: .badge_counts.bronze,
+          website_url: .website_url,
+          location: .location,
+          about_me: (.about_me | gsub("<[^>]*>"; "")),
+          creation_date: (.creation_date | todate),
+          last_access_date: (.last_access_date | todate),
+          question_count: .question_count,
+          answer_count: .answer_count,
+          profile_image: .profile_image,
+          link: .link
+        }'
+
+  - name: get_user_answers
+    description:
+      en: Get answers posted by a Stack Overflow user
+      zh: 获取Stack Overflow用户发布的答案
+    parameters:
+      user_id:
+        type: string
+        description:
+          en: Stack Overflow user ID
+          zh: Stack Overflow用户ID
+        required: true
+      sort:
+        type: string
+        enum: [votes, activity, creation]
+        description:
+          en: Sort answers by
+          zh: 答案排序方式
+        default: votes
+      limit:
+        type: integer
+        description:
+          en: Number of answers to return
+          zh: 返回答案数量
+        default: 20
+    implementation:
+      type: shell
+      command: |
+        curl -s "https://api.stackexchange.com/2.3/users/{{user_id}}/answers?order=desc&sort={{sort}}&site=stackoverflow&pagesize={{limit}}" | jq '.items[] | {
+          answer_id: .answer_id,
+          question_id: .question_id,
+          score: .score,
+          is_accepted: .is_accepted,
+          creation_date: (.creation_date | todate),
+          title: .title,
+          link: .link
+        }'
+
+  - name: get_tag_info
+    description:
+      en: Get information about a Stack Overflow tag
+      zh: 获取Stack Overflow标签信息
+    parameters:
+      tag_name:
+        type: string
+        description:
+          en: Tag name
+          zh: 标签名称
+        required: true
+    implementation:
+      type: shell
+      command: |
+        curl -s "https://api.stackexchange.com/2.3/tags/{{tag_name}}/info?site=stackoverflow" | jq '.items[0] | {
+          name: .name,
+          count: .count,
+          has_synonyms: .has_synonyms,
+          is_moderator_only: .is_moderator_only,
+          is_required: .is_required,
+          last_activity_date: (.last_activity_date | todate),
+          synonyms: .synonyms
+        }'
