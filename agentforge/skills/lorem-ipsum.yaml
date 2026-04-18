@@ -2,7 +2,7 @@ name: lorem-ipsum
 version: "1.1.0"
 description: "Generate Lorem Ipsum placeholder text"
 description_zh: "生成 Lorem Ipsum 占位文本"
-author: agentforge
+author: agentbolt
 category: content
 triggers: ["lorem ipsum", "generate placeholder text", "dummy text", "fake text"]
 triggers_zh: ["占位文本", "假文本", "填充文本", "Lorem Ipsum"]

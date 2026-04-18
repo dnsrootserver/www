@@ -26,10 +26,10 @@
 
 ```bash
 # After purchase, copy skills to:
-cp packs/devops/*.yaml ~/.agentforge/skills/
+cp packs/devops/*.yaml ~/.agentbolt/skills/
 
 # Verify
-agentforge list
+agentbolt list
 ```
 
 ## Requirements

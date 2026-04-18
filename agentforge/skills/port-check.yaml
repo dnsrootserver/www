@@ -2,7 +2,7 @@ name: port-check
 version: "1.1.0"
 description: "Check if a specific port is open on a host"
 description_zh: "检查主机端口是否开放"
-author: agentforge
+author: agentbolt
 category: network
 triggers: ["port check", "check port", "port open", "test port"]
 triggers_zh: ["端口检查", "检查端口", "端口开放"]

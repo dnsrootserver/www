@@ -50,7 +50,7 @@ tools:
         else
           url="https://www.reddit.com/search.json?q={{query}}&sort={{sort}}&t={{time}}&limit={{limit}}"
         fi
-        curl -s -H "User-Agent: AgentForge/1.0" "$url" | jq '.data.children[] | {title: .data.title, author: .data.author, score: .data.score, num_comments: .data.num_comments, created_utc: .data.created_utc, url: .data.url, selftext: .data.selftext[0:200]}'
+        curl -s -H "User-Agent: AgentBolt/1.0" "$url" | jq '.data.children[] | {title: .data.title, author: .data.author, score: .data.score, num_comments: .data.num_comments, created_utc: .data.created_utc, url: .data.url, selftext: .data.selftext[0:200]}'
 
   - name: get_subreddit_hot
     description:
@@ -72,7 +72,7 @@ tools:
     implementation:
       type: shell
       command: |
-        curl -s -H "User-Agent: AgentForge/1.0" "https://www.reddit.com/r/{{subreddit}}/hot.json?limit={{limit}}" | jq '.data.children[] | {title: .data.title, author: .data.author, score: .data.score, num_comments: .data.num_comments, created_utc: .data.created_utc, url: .data.url}'
+        curl -s -H "User-Agent: AgentBolt/1.0" "https://www.reddit.com/r/{{subreddit}}/hot.json?limit={{limit}}" | jq '.data.children[] | {title: .data.title, author: .data.author, score: .data.score, num_comments: .data.num_comments, created_utc: .data.created_utc, url: .data.url}'
 
   - name: get_post_comments
     description:
@@ -100,4 +100,4 @@ tools:
     implementation:
       type: shell
       command: |
-        curl -s -H "User-Agent: AgentForge/1.0" "https://www.reddit.com/r/{{subreddit}}/comments/{{post_id}}.json?limit={{limit}}" | jq '.[1].data.children[] | {author: .data.author, body: .data.body[0:500], score: .data.score, created_utc: .data.created_utc}'
+        curl -s -H "User-Agent: AgentBolt/1.0" "https://www.reddit.com/r/{{subreddit}}/comments/{{post_id}}.json?limit={{limit}}" | jq '.[1].data.children[] | {author: .data.author, body: .data.body[0:500], score: .data.score, created_utc: .data.created_utc}'

@@ -2,7 +2,7 @@ name: dns-lookup
 version: "1.1.0"
 description: "Perform DNS lookups for domains using dig"
 description_zh: "使用 dig 进行 DNS 查询"
-author: agentforge
+author: agentbolt
 category: network
 triggers: ["dns lookup", "dns query", "resolve domain", "dig"]
 triggers_zh: ["DNS 查询", "域名解析", "查找域名"]

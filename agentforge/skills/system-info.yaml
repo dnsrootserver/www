@@ -1,7 +1,7 @@
 name: system-info
 version: "1.0.0"
 description: "Gather system information and generate a report"
-author: agentforge
+author: agentbolt
 triggers:
   - "system info"
   - "system report"

@@ -1,7 +1,7 @@
 name: github-repo-info
 version: "1.0.0"
 description: "Get detailed information about a GitHub repository"
-author: agentforge
+author: agentbolt
 triggers:
   - "github repo"
   - "repo info"

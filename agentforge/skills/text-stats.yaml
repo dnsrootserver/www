@@ -2,7 +2,7 @@ name: text-stats
 version: "1.1.0"
 description: "Count words, characters, and lines in text"
 description_zh: "统计文本中的单词、字符和行数"
-author: agentforge
+author: agentbolt
 category: content
 triggers: ["text statistics", "count words", "text analysis", "word count", "character count"]
 triggers_zh: ["文本统计", "字数统计", "文字分析", "字符统计"]

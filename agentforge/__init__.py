@@ -1,12 +1,12 @@
 """
-AgentForge — Declarative AI Agent Skill Framework
-Build agent skills with YAML, not code.
+AgentBolt — Build AI Agent Skills with YAML — Fast, Simple, Powerful
+Build AI Agent Skills with YAML — Fast, Simple, Powerful.
 """
 
 __version__ = "1.1.0"
-__author__ = "AgentForge Contributors"
+__author__ = "AgentBolt Contributors"
 
-from agentforge.core.engine import AgentEngine, Skill
-from agentforge.core.loader import SkillLoader
+from agentbolt.core.engine import AgentEngine, Skill
+from agentbolt.core.loader import SkillLoader
 
 __all__ = ["AgentEngine", "Skill", "SkillLoader"]

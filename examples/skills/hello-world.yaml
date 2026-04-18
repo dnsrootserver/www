@@ -1,7 +1,7 @@
 name: hello-world
 version: "1.0.0"
 description: "A simple hello world skill to get started"
-author: agentforge
+author: agentbolt
 triggers:
   - "hello"
   - "hi"
@@ -13,5 +13,5 @@ variables:
 steps:
   - tool: output
     params:
-      message: "👋 {{ greeting }}, world! This is AgentForge in action."
+      message: "👋 {{ greeting }}, world! This is AgentBolt in action."
       format: text

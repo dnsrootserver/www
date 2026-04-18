@@ -2,7 +2,7 @@ name: whois-lookup
 version: "1.1.0"
 description: "Perform WHOIS lookup for domains"
 description_zh: "执行域名 WHOIS 查询"
-author: agentforge
+author: agentbolt
 category: network
 triggers: ["whois", "whois lookup", "domain whois", "domain info"]
 triggers_zh: ["WHOIS 查询", "域名信息", "域名查询"]

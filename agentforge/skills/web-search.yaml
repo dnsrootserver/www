@@ -1,7 +1,7 @@
 name: web-search
 version: "1.0.0"
 description: "Search the web and summarize results using Jina Reader"
-author: agentforge
+author: agentbolt
 triggers:
   - "search"
   - "google"

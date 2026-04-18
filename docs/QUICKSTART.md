@@ -1,9 +1,9 @@
-# AgentForge Quick Start Guide
+# AgentBolt Quick Start Guide
 
 ## Installation
 
 ```bash
-pip install agentforge
+pip install agentbolt
 ```
 
 ## Your First Skill (5 minutes)
@@ -11,7 +11,7 @@ pip install agentforge
 ### 1. Create a skill
 
 ```bash
-agentforge init my-first-skill
+agentbolt init my-first-skill
 ```
 
 This creates `my-first-skill/skill.yaml`:
@@ -65,13 +65,13 @@ steps:
 ### 3. Run it
 
 ```bash
-agentforge run my-weather/skill.yaml
+agentbolt run my-weather/skill.yaml
 ```
 
 ### 4. Interactive mode
 
 ```bash
-agentforge chat
+agentbolt chat
 ```
 
 ## Available Tools
@@ -102,8 +102,8 @@ Use Jinja2 syntax in params:
 ## Publishing Your Skill
 
 1. Write your `skill.yaml`
-2. Test with `agentforge run skill.yaml`
-3. Validate with `agentforge validate skill.yaml`
+2. Test with `agentbolt run skill.yaml`
+3. Validate with `agentbolt validate skill.yaml`
 4. Share the YAML file — it's just one file!
 
 ## Monetization

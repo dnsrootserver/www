@@ -1,5 +1,5 @@
 """
-AgentForge CLI — Command line interface for the AgentForge framework.
+AgentBolt CLI — Command line interface for the AgentBolt framework.
 """
 
 import os
@@ -16,19 +16,19 @@ from rich.markdown import Markdown
 from rich.syntax import Syntax
 from rich import print as rprint
 
-from agentforge import __version__
-from agentforge.core.engine import AgentEngine, Skill
-from agentforge.core.loader import SkillLoader
+from agentbolt import __version__
+from agentbolt.core.engine import AgentEngine, Skill
+from agentbolt.core.loader import SkillLoader
 
 console = Console()
 
 
 @click.group()
-@click.version_option(__version__, prog_name="agentforge")
+@click.version_option(__version__, prog_name="agentbolt")
 def main():
-    """🤖 AgentForge — Declarative AI Agent Skill Framework
+    """🤖 AgentBolt — Build AI Agent Skills with YAML — Fast, Simple, Powerful
     
-    Build agent skills with YAML, not code.
+    Build AI Agent Skills with YAML — Fast, Simple, Powerful.
     """
     pass
 
@@ -78,7 +78,7 @@ def init(name, dir):
         f"[green]✓[/green] Created skill: [cyan]{name}[/cyan]\n"
         f"  File: {skill_file}\n\n"
         f"[dim]Edit the YAML file to define your skill's behavior.\n"
-        f"Run with: agentforge run {skill_file}[/dim]",
+        f"Run with: agentbolt run {skill_file}[/dim]",
         title="New Skill"
     ))
 
@@ -142,7 +142,7 @@ def chat(dir, user_input):
     count = engine.load_skills()
     
     if count == 0:
-        console.print("[yellow]No skills found. Create one with: agentforge init <name>[/yellow]")
+        console.print("[yellow]No skills found. Create one with: agentbolt init <name>[/yellow]")
         return
     
     if user_input:
@@ -168,7 +168,7 @@ def list(dir):
     
     if not skills:
         console.print("[yellow]No skills found.[/yellow]")
-        console.print("[dim]Create one with: agentforge init <name>[/dim]")
+        console.print("[dim]Create one with: agentbolt init <name>[/dim]")
         return
     
     table = Table(title=f"Available Skills ({len(skills)})")

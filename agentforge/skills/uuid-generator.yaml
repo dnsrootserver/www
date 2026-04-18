@@ -2,7 +2,7 @@ name: uuid-generator
 version: "1.1.0"
 description: "Generate UUIDs (v1, v4) and random strings"
 description_zh: "生成 UUID（v1, v4）和随机字符串"
-author: agentforge
+author: agentbolt
 category: developer
 triggers: ["uuid", "generate uuid", "random id", "unique id"]
 triggers_zh: ["生成uuid", "随机id", "唯一标识"]

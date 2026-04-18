@@ -34,7 +34,7 @@ tools:
         description:
           en: Custom User-Agent string
           zh: 自定义User-Agent字符串
-        default: "Mozilla/5.0 (AgentForge Scraper)"
+        default: "Mozilla/5.0 (AgentBolt Scraper)"
     implementation:
       type: shell
       command: |

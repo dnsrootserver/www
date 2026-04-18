@@ -1,5 +1,5 @@
 """
-AgentForge Core Engine v1.1.0
+AgentBolt Core Engine v1.1.0
 Supports 18 built-in tools + LLM integration + multi-language
 """
 
@@ -381,7 +381,7 @@ def _tool_notify(params, context):
     """Send notification (desktop, file, webhook)."""
     message = _render(params.get("message", ""), context)
     method = params.get("method", "desktop")
-    title = _render(params.get("title", "AgentForge"), context)
+    title = _render(params.get("title", "AgentBolt"), context)
     
     try:
         if method == "desktop":
@@ -393,7 +393,7 @@ def _tool_notify(params, context):
             resp = requests.post(url, json={"text": message, "title": title}, timeout=10)
             return {"status": resp.status_code, "success": resp.status_code < 400}
         elif method == "file":
-            path = _render(params.get("path", "/tmp/agentforge-notifications.log"), context)
+            path = _render(params.get("path", "/tmp/agentbolt-notifications.log"), context)
             with open(path, "a") as f:
                 f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {title}: {message}\n")
             return {"path": path, "success": True}
@@ -543,10 +543,10 @@ class AgentEngine:
             from rich.table import Table
             console = Console()
             console.print(Panel(
-                f"[bold green]AgentForge v1.1.0[/bold green]\n"
+                f"[bold green]AgentBolt v1.1.0[/bold green]\n"
                 f"Loaded [cyan]{len(self.skills)}[/cyan] skills | [cyan]{len(ToolExecutor.list_tools())}[/cyan] tools\n"
                 f"Type [bold]help[/bold] for commands, [bold]skills[/bold] to list skills",
-                title="🤖 AgentForge"
+                title="🤖 AgentBolt"
             ))
             while True:
                 try:
@@ -593,4 +593,4 @@ class AgentEngine:
                 else:
                     console.print(f"[red]No skill matched. Type 'skills' to see available.[/red]")
         except ImportError:
-            print("AgentForge v1.1.0 — Install 'rich' for interactive mode: pip install rich")
+            print("AgentBolt v1.1.0 — Install 'rich' for interactive mode: pip install rich")

@@ -2,7 +2,7 @@ name: ip-lookup
 version: "1.1.0"
 description: "Look up IP address information using ip-api.com"
 description_zh: "使用 ip-api.com 查询 IP 地址信息"
-author: agentforge
+author: agentbolt
 category: network
 triggers: ["ip lookup", "whois ip", "ip info", "ip address info"]
 triggers_zh: ["IP 查询", "IP 地址查询", "IP 信息"]

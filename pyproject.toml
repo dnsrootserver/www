@@ -3,13 +3,13 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentforge"
+name = "agentbolt"
 version = "1.1.0"
-description = "Declarative AI Agent Skill Framework — Build agent skills with YAML, not code"
+description = "Build AI Agent Skills with YAML — Fast, Simple, Powerful"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
-authors = [{name = "AgentForge Contributors"}]
+authors = [{name = "AgentBolt Contributors"}]
 keywords = ["ai", "agent", "skill", "framework", "llm", "automation", "yaml"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -32,8 +32,8 @@ full = ["openai>=1.0", "anthropic>=0.20", "feedparser>=6.0"]
 dev = ["pytest>=7.0", "black", "ruff"]
 
 [project.scripts]
-agentforge = "agentforge.cli:main"
-af = "agentforge.cli:main"
+agentbolt = "agentforge.cli:main"
+ab = "agentforge.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["agentforge*"]
