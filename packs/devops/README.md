@@ -26,10 +26,10 @@
 
 ```bash
 # After purchase, copy skills to:
-cp packs/devops/*.yaml ~/.agentbolt/skills/
+cp packs/devops/*.yaml ~/.skillsnap/skills/
 
 # Verify
-agentbolt list
+skillsnap list
 ```
 
 ## Requirements

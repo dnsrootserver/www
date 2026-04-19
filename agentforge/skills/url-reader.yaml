@@ -1,7 +1,7 @@
 name: url-reader
 version: "1.0.0"
 description: "Read and extract content from any URL"
-author: agentbolt
+author: skillsnap
 triggers:
   - "read url"
   - "open url"

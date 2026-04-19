@@ -1,12 +1,12 @@
 """
-AgentBolt — Build AI Agent Skills with YAML — Fast, Simple, Powerful
-Build AI Agent Skills with YAML — Fast, Simple, Powerful.
+SkillSnap — Build AI Agent Skills with YAML — Snap, Done!
+Build AI Agent Skills with YAML — Snap, Done!.
 """
 
 __version__ = "1.1.0"
-__author__ = "AgentBolt Contributors"
+__author__ = "SkillSnap Contributors"
 
-from agentbolt.core.engine import AgentEngine, Skill
-from agentbolt.core.loader import SkillLoader
+from agentforge.core.engine import AgentEngine, Skill
+from agentforge.core.loader import SkillLoader
 
 __all__ = ["AgentEngine", "Skill", "SkillLoader"]

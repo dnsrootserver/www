@@ -1,7 +1,7 @@
 name: code-review
 version: "1.0.0"
 description: "Analyze code files for quality, security issues, and best practices"
-author: agentbolt
+author: skillsnap
 triggers:
   - "review code"
   - "check code"

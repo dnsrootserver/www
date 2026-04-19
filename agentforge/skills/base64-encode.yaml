@@ -2,7 +2,7 @@ name: base64-encode
 version: "1.1.0"
 description: "Encode/decode Base64 strings"
 description_zh: "Base64 编码/解码"
-author: agentbolt
+author: skillsnap
 category: developer
 triggers: ["base64", "encode", "decode"]
 triggers_zh: ["base64编码", "base64解码", "编码", "解码"]

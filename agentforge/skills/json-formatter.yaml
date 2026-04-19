@@ -2,7 +2,7 @@ name: json-formatter
 version: "1.1.0"
 description: "Format, validate, minify, or query JSON data"
 description_zh: "格式化、验证、压缩或查询 JSON 数据"
-author: agentbolt
+author: skillsnap
 category: developer
 triggers: ["format json", "json pretty", "json minify", "validate json"]
 triggers_zh: ["格式化json", "json格式化", "压缩json", "验证json"]

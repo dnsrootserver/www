@@ -2,7 +2,7 @@ name: ping-test
 version: "1.1.0"
 description: "Ping a host to test connectivity"
 description_zh: "Ping 主机测试连通性"
-author: agentbolt
+author: skillsnap
 category: network
 triggers: ["ping", "ping test", "test connection", "host ping"]
 triggers_zh: ["Ping", "测试连接", "网络测试"]

@@ -78,7 +78,7 @@ tools:
         echo "To actually post, you need to:"
         echo "1. Create a LinkedIn app at https://www.linkedin.com/developers/"
         echo "2. Get access token with w_member_social permission"
-        echo "3. Use the LinkedIn API directly or integrate with AgentBolt"
+        echo "3. Use the LinkedIn API directly or integrate with SkillSnap"
         
         # Example of how to post via API (commented out)
         # curl -X POST "https://api.linkedin.com/v2/ugcPosts" \

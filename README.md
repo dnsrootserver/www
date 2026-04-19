@@ -1,6 +1,6 @@
-# ⚡ AgentBolt
+# ⚡ SkillSnap
 
-**用 YAML 构建 AI Agent 技能 — 快、简单、强大** | **Build AI Agent Skills with YAML — Fast, Simple, Powerful**
+**用 YAML 构建 AI Agent 技能 — 咔嚓，搞定！** | **Build AI Agent Skills with YAML — Snap, Done!**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
@@ -21,7 +21,7 @@
 
 ## 🇨🇳 中文
 
-### 为什么选择 AgentBolt？
+### 为什么选择 SkillSnap？
 
 **写一个AI Agent技能，传统方式：**
 ```python
@@ -33,7 +33,7 @@ import requests, json, os, sys
 # 终于写完了，但别人看不懂
 ```
 
-**用 AgentBolt：**
+**用 SkillSnap：**
 ```yaml
 name: 天气查询
 triggers: ["天气"]
@@ -61,16 +61,16 @@ steps:
 
 ```bash
 # 安装
-pip install agentbolt
+pip install skillsnap
 
 # 查看所有技能
-agentbolt list
+skillsnap list
 
 # 运行一个技能
-agentbolt run weather
+skillsnap run weather
 
 # 交互模式
-agentbolt chat
+skillsnap chat
 ```
 
 ### 📦 73个技能一览
@@ -109,7 +109,7 @@ agentbolt chat
 
 ### 💰 为什么开发者选我们？
 
-| | AgentBolt | LangChain | 自己写代码 |
+| | SkillSnap | LangChain | 自己写代码 |
 |--|-----------|-----------|-----------|
 | 上手时间 | ⚡ 5分钟 | 🕐 5小时 | 🕐🕐 5天 |
 | 需要写代码 | ❌ 不用 | ✅ 要 | ✅ 必须 |
@@ -122,7 +122,7 @@ agentbolt chat
 
 ## 🇺🇸 English
 
-### ⚡ AgentBolt — Build AI Agent Skills with YAML
+### ⚡ SkillSnap — Build AI Agent Skills with YAML
 
 **3 lines of YAML = 1 AI Agent skill.**
 
@@ -131,10 +131,10 @@ No Python. No JavaScript. Just YAML.
 ### Quick Start
 
 ```bash
-pip install agentbolt
-agentbolt list
-agentbolt run weather
-agentbolt chat
+pip install skillsnap
+skillsnap list
+skillsnap run weather
+skillsnap chat
 ```
 
 ### 73 Skills, 18 Tools, Bilingual
@@ -144,9 +144,9 @@ agentbolt chat
 - **15 Data Skills** ($29): CSV, Excel, JSON, API extractor, web scraper, data viz, SQL, data cleaning, merge, format converter, regex builder, data validator, API mocker, schema generator, data sampler
 - **15 Social Skills** ($19): Twitter, Reddit, RSS, Hacker News, GitHub trending, arXiv, Product Hunt, YouTube, LinkedIn, Medium, Dev.to, Stack Overflow, news aggregator, blog monitor, social analytics
 
-### Why AgentBolt?
+### Why SkillSnap?
 
-| Feature | AgentBolt | LangChain | Custom Code |
+| Feature | SkillSnap | LangChain | Custom Code |
 |---------|-----------|-----------|-------------|
 | Time to build | ⚡ 5 min | 🕐 5 hours | 🕐🕐 5 days |
 | Code required | ❌ No | ✅ Yes | ✅ Must |
@@ -168,4 +168,4 @@ MIT — Free for personal and commercial use.
 
 ---
 
-⚡ **AgentBolt — 用 YAML 构建 AI Agent 技能，快、简单、强大**
+⚡ **SkillSnap — 用 YAML 构建 AI Agent 技能，快、简单、强大**

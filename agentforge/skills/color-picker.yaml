@@ -2,7 +2,7 @@ name: color-picker
 version: "1.1.0"
 description: "Generate color palettes and hex codes"
 description_zh: "生成调色板和十六进制颜色代码"
-author: agentbolt
+author: skillsnap
 category: creative
 triggers: ["color palette", "generate colors", "hex codes", "color picker", "random colors"]
 triggers_zh: ["调色板", "颜色生成", "十六进制颜色", "颜色选择器", "随机颜色"]

@@ -2,7 +2,7 @@ name: ssl-check
 version: "1.1.0"
 description: "Check SSL certificate information for a domain"
 description_zh: "检查域名 SSL 证书信息"
-author: agentbolt
+author: skillsnap
 category: security
 triggers: ["ssl check", "check ssl", "ssl certificate", "certificate info"]
 triggers_zh: ["SSL 检查", "证书检查", "SSL 证书"]

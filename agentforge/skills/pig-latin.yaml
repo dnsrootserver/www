@@ -2,7 +2,7 @@ name: pig-latin
 version: "1.1.0"
 description: "Convert text to Pig Latin"
 description_zh: "将文本转换为猪拉丁语"
-author: agentbolt
+author: skillsnap
 category: fun
 triggers: ["pig latin", "convert to pig latin", "pig latin text", "translate pig latin"]
 triggers_zh: ["猪拉丁语", "转换为猪拉丁语", "猪拉丁文本", "翻译猪拉丁语"]

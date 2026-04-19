@@ -1,9 +1,9 @@
-# AgentBolt Quick Start Guide
+# SkillSnap Quick Start Guide
 
 ## Installation
 
 ```bash
-pip install agentbolt
+pip install skillsnap
 ```
 
 ## Your First Skill (5 minutes)
@@ -11,7 +11,7 @@ pip install agentbolt
 ### 1. Create a skill
 
 ```bash
-agentbolt init my-first-skill
+skillsnap init my-first-skill
 ```
 
 This creates `my-first-skill/skill.yaml`:
@@ -65,13 +65,13 @@ steps:
 ### 3. Run it
 
 ```bash
-agentbolt run my-weather/skill.yaml
+skillsnap run my-weather/skill.yaml
 ```
 
 ### 4. Interactive mode
 
 ```bash
-agentbolt chat
+skillsnap chat
 ```
 
 ## Available Tools
@@ -102,8 +102,8 @@ Use Jinja2 syntax in params:
 ## Publishing Your Skill
 
 1. Write your `skill.yaml`
-2. Test with `agentbolt run skill.yaml`
-3. Validate with `agentbolt validate skill.yaml`
+2. Test with `skillsnap run skill.yaml`
+3. Validate with `skillsnap validate skill.yaml`
 4. Share the YAML file — it's just one file!
 
 ## Monetization

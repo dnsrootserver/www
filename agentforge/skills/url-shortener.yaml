@@ -2,7 +2,7 @@ name: url-shortener
 version: "1.1.0"
 description: "Shorten URLs using free services"
 description_zh: "使用免费服务缩短 URL"
-author: agentbolt
+author: skillsnap
 category: web
 triggers: ["shorten url", "short url", "shorten link"]
 triggers_zh: ["短链接", "缩短链接", "短网址"]

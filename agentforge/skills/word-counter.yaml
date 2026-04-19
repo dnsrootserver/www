@@ -2,7 +2,7 @@ name: word-counter
 version: "1.1.0"
 description: "Detailed word frequency analysis and statistics"
 description_zh: "详细的单词频率分析和统计"
-author: agentbolt
+author: skillsnap
 category: analysis
 triggers: ["word frequency", "word analysis", "count word frequency", "word statistics", "text frequency"]
 triggers_zh: ["词频分析", "单词分析", "单词频率统计", "文本频率"]

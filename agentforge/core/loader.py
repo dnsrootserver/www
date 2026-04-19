@@ -5,7 +5,7 @@ import yaml
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from agentbolt.core.engine import Skill
+from agentforge.core.engine import Skill
 
 
 class SkillLoader:
@@ -79,7 +79,7 @@ class SkillLoader:
             skills.extend(SkillLoader.load_from_dir("skills"))
         
         # User home directory
-        home_skills = Path.home() / ".agentbolt" / "skills"
+        home_skills = Path.home() / ".skillsnap" / "skills"
         if home_skills.exists():
             skills.extend(SkillLoader.load_from_dir(str(home_skills)))
         

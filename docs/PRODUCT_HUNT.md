@@ -1,7 +1,7 @@
-# ⚡ AgentBolt — Product Hunt Launch
+# ⚡ SkillSnap — Product Hunt Launch
 
 ## Title
-AgentBolt — 3 Lines of YAML = 1 AI Agent Skill ⚡
+SkillSnap — 3 Lines of YAML = 1 AI Agent Skill ⚡
 
 ## Tagline
 73 skills. 18 tools. YAML-only. No code. Just fast.
@@ -15,7 +15,7 @@ I was frustrated. Every time I wanted to build an AI agent skill, I had to:
 2. Handle errors, configs, output formatting
 3. Spend hours on plumbing instead of the actual skill
 
-So I built AgentBolt — a framework where you define AI agent skills in simple YAML files.
+So I built SkillSnap — a framework where you define AI agent skills in simple YAML files.
 
 **3 lines of YAML = a working skill.**
 
@@ -35,7 +35,7 @@ steps:
 - **18 built-in tools** — shell, HTTP, file ops, regex, JSON, notifications, downloads, compression
 - **Full bilingual support** — English and Chinese
 - **Premium packs** — DevOps ($29), Data ($29), Social ($19), All Access ($59)
-- **5-minute setup** — `pip install agentbolt` and you're ready
+- **5-minute setup** — `pip install skillsnap` and you're ready
 
 ### Who it's for:
 
@@ -46,7 +46,7 @@ steps:
 
 ### What's different:
 
-| | AgentBolt | LangChain | Custom Code |
+| | SkillSnap | LangChain | Custom Code |
 |--|-----------|-----------|-------------|
 | Setup time | 5 min | 5 hours | 5 days |
 | Code needed | No | Yes | Must |
@@ -72,11 +72,11 @@ Would love your feedback! What skills should I add next? 🚀
 
 ## Description
 
-AgentBolt is a declarative framework for building AI agent skills. Define skills in YAML, not code. Includes 73 ready-to-use skills across web search, DevOps, data processing, and social media.
+SkillSnap is a declarative framework for building AI agent skills. Define skills in YAML, not code. Includes 73 ready-to-use skills across web search, DevOps, data processing, and social media.
 
 ## Topics
 ai, developer-tools, productivity, automation, open-source, yaml, no-code, agent
 
 ## Links
 - GitHub: https://github.com/dnsrootserver/www
-- Twitter: @agentbolt (coming)
+- Twitter: @skillsnap (coming)

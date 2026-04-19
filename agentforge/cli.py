@@ -1,5 +1,5 @@
 """
-AgentBolt CLI — Command line interface for the AgentBolt framework.
+SkillSnap CLI — Command line interface for the SkillSnap framework.
 """
 
 import os
@@ -16,19 +16,19 @@ from rich.markdown import Markdown
 from rich.syntax import Syntax
 from rich import print as rprint
 
-from agentbolt import __version__
-from agentbolt.core.engine import AgentEngine, Skill
-from agentbolt.core.loader import SkillLoader
+from skillsnap import __version__
+from agentforge.core.engine import AgentEngine, Skill
+from agentforge.core.loader import SkillLoader
 
 console = Console()
 
 
 @click.group()
-@click.version_option(__version__, prog_name="agentbolt")
+@click.version_option(__version__, prog_name="skillsnap")
 def main():
-    """🤖 AgentBolt — Build AI Agent Skills with YAML — Fast, Simple, Powerful
+    """🤖 SkillSnap — Build AI Agent Skills with YAML — Snap, Done!
     
-    Build AI Agent Skills with YAML — Fast, Simple, Powerful.
+    Build AI Agent Skills with YAML — Snap, Done!.
     """
     pass
 
@@ -78,7 +78,7 @@ def init(name, dir):
         f"[green]✓[/green] Created skill: [cyan]{name}[/cyan]\n"
         f"  File: {skill_file}\n\n"
         f"[dim]Edit the YAML file to define your skill's behavior.\n"
-        f"Run with: agentbolt run {skill_file}[/dim]",
+        f"Run with: skillsnap run {skill_file}[/dim]",
         title="New Skill"
     ))
 
@@ -142,7 +142,7 @@ def chat(dir, user_input):
     count = engine.load_skills()
     
     if count == 0:
-        console.print("[yellow]No skills found. Create one with: agentbolt init <name>[/yellow]")
+        console.print("[yellow]No skills found. Create one with: skillsnap init <name>[/yellow]")
         return
     
     if user_input:
@@ -168,7 +168,7 @@ def list(dir):
     
     if not skills:
         console.print("[yellow]No skills found.[/yellow]")
-        console.print("[dim]Create one with: agentbolt init <name>[/dim]")
+        console.print("[dim]Create one with: skillsnap init <name>[/dim]")
         return
     
     table = Table(title=f"Available Skills ({len(skills)})")

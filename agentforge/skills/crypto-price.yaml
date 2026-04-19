@@ -1,7 +1,7 @@
 name: crypto-price
 version: "1.0.0"
 description: "Get cryptocurrency prices and market data"
-author: agentbolt
+author: skillsnap
 triggers:
   - "crypto"
   - "bitcoin"

@@ -1,7 +1,7 @@
-# ⚡ AgentBolt Premium — Gumroad Product Page
+# ⚡ SkillSnap Premium — Gumroad Product Page
 
 ## Product Title
-AgentBolt — Premium AI Agent Skill Packs
+SkillSnap — Premium AI Agent Skill Packs
 
 ## Short Description
 73 AI agent skills. YAML-based. No code. Save 100+ hours of development.
@@ -14,11 +14,11 @@ AgentBolt — Premium AI Agent Skill Packs
 
 ## Full Description
 
-# ⚡ AgentBolt Premium Skill Packs
+# ⚡ SkillSnap Premium Skill Packs
 
 **Stop writing boilerplate. Start building skills.**
 
-AgentBolt is the fastest way to create AI agent skills. Define them in YAML, not code.
+SkillSnap is the fastest way to create AI agent skills. Define them in YAML, not code.
 
 ---
 
@@ -124,7 +124,7 @@ All 45 premium skills + lifetime free updates.
 ## Requirements
 
 - Python 3.9+
-- AgentBolt framework (free, `pip install agentbolt`)
+- SkillSnap framework (free, `pip install skillsnap`)
 - Some skills need CLI tools (documented per skill)
 
 ## FAQ
@@ -151,4 +151,4 @@ ai, agent, devops, data, social-media, automation, yaml, no-code, developer-tool
 
 ---
 
-⚡ **AgentBolt — Build AI Agent Skills with YAML. Fast.**
+⚡ **SkillSnap — Build AI Agent Skills with YAML. Fast.**
